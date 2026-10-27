@@ -1,4 +1,6 @@
-import { FIELD, VIEW, projectPoint, unprojectPoint, visibleWorld, stageAppearance, clamp } from './engine.mjs';
+import { FIELD, VIEW, CHARACTER, projectPoint, unprojectPoint, visibleWorld, stageAppearance, clamp } from './engine.mjs';
+
+export function warningSize(distance,width=390){return (3+8*Math.pow(clamp((42-distance)/36,0,1),1.25))*clamp(width/390,.85,1.4);}
 
 export class Renderer{
   constructor(canvas){
@@ -45,7 +47,7 @@ export class Renderer{
     const light=c.createLinearGradient(0,0,w,h);light.addColorStop(0,'#345b1712');light.addColorStop(.5,'#a8cf6110');light.addColorStop(1,'#1e401416');c.fillStyle=light;c.fillRect(0,0,w,h);
   }
   cylinder(x,z,player,time,glow=0,opacity=1,stage=0){
-    const c=this.ctx,p=this.project(x,z),r=this.unit*(player?.43:.42)*p.s,ry=r*.44,height=this.unit*.95*p.s,top=p.y-height,appearance=stageAppearance(stage);
+    const c=this.ctx,p=this.project(x,z),r=this.unit*(player?CHARACTER.playerRadius:CHARACTER.enemyRadius)*p.s,ry=r*CHARACTER.ellipse,height=this.unit*CHARACTER.height*p.s,top=p.y-height,appearance=stageAppearance(stage);
     c.save();c.globalAlpha=opacity;
     const shadow=c.createRadialGradient(p.x-r*.65,p.y+r*.48,0,p.x-r*.65,p.y+r*.48,r*2.6);shadow.addColorStop(0,'#19351ba0');shadow.addColorStop(1,'#19351b00');
     c.fillStyle=shadow;c.beginPath();c.ellipse(p.x-r*.65,p.y+r*.48,r*2.5,r*.8,-.55,0,Math.PI*2);c.fill();
@@ -60,8 +62,8 @@ export class Renderer{
     c.restore();
   }
   warning(w,time,player){
-    const c=this.ctx,e=w.enemy,p=this.project(e.x,e.z),target=this.project(player.x,player.z),x=clamp(p.x,14,this.w-14),y=clamp(p.y,24,this.h-24),s=5.5*(this.reduced?1:1+Math.sin(time*8+e.phase)*.1);
-    c.save();c.translate(x,y);c.fillStyle='#264e2a66';c.beginPath();c.arc(0,0,10,0,Math.PI*2);c.fill();c.rotate(Math.atan2(target.y-p.y,target.x-p.x));c.fillStyle=stageAppearance(e.stage).warning;c.beginPath();c.moveTo(s,0);c.lineTo(-s,-s*.7);c.lineTo(-s,s*.7);c.closePath();c.fill();c.restore();
+    const c=this.ctx,e=w.enemy,p=this.project(e.x,e.z),target=this.project(player.x,player.z),s=warningSize(Math.hypot(e.x-player.x,e.z-player.z),this.w),padding=s*1.7+3,x=clamp(p.x,padding,this.w-padding),y=clamp(p.y,padding,this.h-padding);
+    c.save();c.translate(x,y);c.fillStyle='#264e2a66';c.beginPath();c.arc(0,0,s*1.5,0,Math.PI*2);c.fill();c.rotate(Math.atan2(target.y-p.y,target.x-p.x));c.fillStyle=stageAppearance(e.stage).warning;c.beginPath();c.moveTo(s,0);c.lineTo(-s,-s*.7);c.lineTo(-s,s*.7);c.closePath();c.fill();c.restore();return s;
   }
   burst(x,z,type='dodge'){this.effects.push({type,x,z,t:0});}
   clearEffects(){this.effects=[];}

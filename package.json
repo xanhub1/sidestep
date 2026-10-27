@@ -1,6 +1,6 @@
 {
   "name": "sidestep-football",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "description": "A world-scrolling football dodge game with smooth cuts, pursuing defenders, and touchdown stages.",
