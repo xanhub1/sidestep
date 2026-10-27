@@ -1,31 +1,29 @@
-# Sidestep
+﻿# Sidestep
 
-A complete, dependency-free HTML5 football dodge game. A close overhead camera shows a full-screen football pitch with parallel yard lines, upright blue and red cylinders, and a minimal arcade score display.
+A dependency-free HTML5 football dodge game. A following overhead camera tracks a blue cylinder through a continuous football field. Cut around pursuing defenders, earn dodge bonuses, and cross the end zone into the next field.
 
 ## Play locally
 
-From this directory run `npm.cmd start` on Windows, or `npm start`, then visit **http://localhost:4173**. JavaScript modules need an HTTP server.
+Run `npm.cmd start` on Windows, or `npm start`, then visit **http://localhost:4173**. JavaScript modules require an HTTP server.
 
-Choose Easy, Medium, or Hardcore and press **Let’s play**. **Swipe or drag anywhere in any direction** to move freely up, down, left, right, or diagonally across the visible pitch. All four arrow keys and **W / A / S / D** work too. **Space** or **Escape** pauses.
+Choose Easy, Medium, or Hardcore. The player runs upfield automatically. **Swipe or drag anywhere** to steer in any direction: up accelerates the run and down slows or briefly reverses it. Release to run straight. Arrow keys and **W / A / S / D** also work; **Space** or **Escape** pauses.
 
-The pitch advances while you move around it. Red cylinders rush toward you from mixed, random directions, with pulsing warning arrows. Every attacker has its own entry position, speed, timing, and pursuit or interception behavior. Dodge the tackle and pull away: beaten defenders slow down and fall behind. One collision ends the run. Easy gives you fewer attackers, Medium adds pressure, and Hardcore has the biggest rushes. Version 1.2.1 lowers running and defender speeds by roughly 15–20% and spaces rushes about 18% farther apart.
+Defenders arrive individually at staggered times from random directions. They intercept and keep pursuing after a miss. Their lower forward speed and gradually reduced effort let the runner pull away, leaving packs behind. They remain collidable until they leave the camera's surrounding area.
 
-Pass cleanly between two defenders for exactly **+50** after clearing the gap. This works in every direction, including diagonal and side-on passes. Distance earns four points per yard. Audio, a short vibration on supported devices, a popup, particles, glow, and a score bounce accompany each bonus.
+A nearby defender successfully evaded awards **+50 DODGE** once. A touchdown awards **+500** once per field. Running distance does not award points. Green fields have red opponents; brown fields have ivory opponents. Earlier pursuers retain their team across a touchdown. One tackle ends the run with a short dust-cloud animation and a score breakdown.
 
-Sound and haptics have separate toggles. Audio unlocks on interaction; devices without vibration continue normally. Best scores are stored locally for each difficulty. Switching away from the browser automatically pauses the run.
+Sound and haptics have separate toggles. Audio unlocks on interaction; unsupported vibration is optional. Per-difficulty best scores are saved locally under a new scoring-version key. Previous best-score data is preserved. Switching away from the browser pauses the run.
 
-## Movement and defender tuning
+## Movement and field model
 
-`dist/engine.mjs` exports `FIELD`, `VIEW`, `DIFFICULTIES`, and `tuning(score, difficulty)`. Movement uses relative swipe deltas with a short 26ms steering filter and a gentle release. Input begins affecting movement on the next physics step, reversals remain quick, and small swipes settle without overshooting. Maximum player speed is 15.5 world units per second, and diagonal speed is normalized. Rendering interpolates positions between 120Hz physics updates to keep motion smooth across different display refresh rates. Bounds adapt to the screen dimensions so the whole visible pitch is available.
+`dist/engine.mjs` owns world coordinates, controls, following-camera state, pursuit, individual arrivals, swept collisions, and scoring. The field is 24 world units wide, each playable length is 200 units, and end zones are 14 units long. A runner advances at 10.4 / 11 / 11.5 units per second on Easy / Medium / Hardcore. Additional two-axis steering is limited to 11.5 units per second with normalized diagonals, a short response filter, and eased release.
 
-Each difficulty changes enemy speed, count, spawn frequency, anticipation, tackle commitment, and population cap. Starting enemy speeds are approximately 6.2 / 7.1 / 9.0 units per second for Easy / Medium / Hardcore before individual variation. Starting rush intervals are approximately 1.59 / 1.30 / 1.01 seconds. Counts and speeds increase smoothly with score. Every rush mixes multiple edges and random angles. Entries begin outside the viewport, have 0.7-second warnings, and never appear on the player. Enemy speeds remain below the player's maximum; populations and lifetime are capped.
+The camera follows forward and lateral movement. Turf markings, actors, and dodge effects use the same world-to-screen transform with mild perspective. Rendering interpolates both the camera and actors between 120Hz physics updates. The pitch edges bound horizontal movement; vertical movement is independent of the viewport.
 
-Defenders commit to a brief 160ms lunge and then return to pursuit. Once the player has escaped a close approach, the defender brakes smoothly, loses effort as the gap increases, and drifts behind with the scrolling field. Fresh attackers retain their approach speed. Trailing defenders remain collidable and eventually leave the field or fade out; they do not continue charging away at full speed.
-
-Gap scoring works between independent defenders, including attackers coming from different directions. It tracks crossings through the segment joining a nearby pair, checks collision margins and full clearance, and rejects a gap blocked by another defender. A pair can award only once. Passing beside a pair, passing a single enemy, or turning back before clearing gives no bonus. Swept collision detection catches fast movement between frames.
+Difficulty changes defender speed, arrival interval, and population limit. Score increases pressure smoothly within bounds. Arrivals have a 0.65-second cue and a final proximity guard. Defender turning is smoothed, interceptors lead the player, and pursuers continue seeking the player in world space. Falling behind follows from relative speed; the engine never forces a pursuing defender to run downfield.
 
 ## Validate and host
 
-Run `npm.cmd test` for the deterministic engine suite, and `npm.cmd run check` for syntax checks. With the local server running, `node tests/browser-smoke.mjs` tests desktop mouse dragging, responsive two-axis touch controls, interpolated rendering, defender fatigue and falling behind, cylinder rendering, natural rushes, mobile layouts, pause, bonuses, collision, and retry using a locally installed Chrome. It writes screenshots and results to the ignored `artifacts/` directory. Set `CHROME_PATH` to use another Chrome installation.
+Run `npm.cmd test` for the engine suite and `npm.cmd run check` for syntax checks. With the local server running, `node tests/browser-smoke.mjs` exercises the playable game through locally installed Chrome: desktop and mobile layouts, touch and mouse steering, automatic running, camera interpolation, scoring, stage transitions, tackle/results, saved best, pause/help, and natural attacks. Screenshots and results go to the ignored `artifacts/` directory. Set `CHROME_PATH` for another Chrome installation.
 
-No packages or build step are required. Deploy the contents of `dist/` to any static host with JavaScript module MIME support. The existing private Sites project is declared in `.openai/hosting.json`.
+No packages or build step are required. Deploy `dist/` to a static host with JavaScript module MIME support. The existing private Sites project is declared in `.openai/hosting.json`.

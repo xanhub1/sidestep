@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#488b35">
-  <meta name="description" content="An open-field football dodge game. Move in every direction, split the defense, and keep your run alive.">
+  <meta name="description" content="An open-field football dodge game. Cut across the pitch, evade defenders, and run for the next touchdown.">
   <title>Sidestep — Find your opening</title>
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="stylesheet" href="./style.css">
@@ -21,7 +21,7 @@
   <main class="game-layout">
     <section class="arena-column" aria-label="Football game">
       <div class="arena" id="arena">
-        <canvas id="game-canvas" aria-label="Football pitch. Swipe or drag in any direction to move the blue cylinder. Avoid red cylinders rushing from random directions." tabindex="0"></canvas>
+        <canvas id="game-canvas" aria-label="Football pitch. The blue cylinder runs upfield automatically. Swipe or drag in any direction to steer and evade pursuing defenders." tabindex="0"></canvas>
         <div class="field-vignette"></div>
         <div class="wordmark" aria-label="Sidestep"><span>≋</span> SIDESTEP</div>
         <div class="game-hud">
@@ -43,7 +43,7 @@
           <button class="primary-button start-button" id="start-button"><span>LET’S PLAY</span><svg><use href="#i-arrow"/></svg></button>
         </section>
 
-        <div class="gesture-hint" id="gesture-hint"><span>✥</span> SWIPE ANY DIRECTION TO MOVE</div>
+        <div class="gesture-hint" id="gesture-hint"><span>✥</span> AUTO RUN / SWIPE TO STEER</div>
         <div class="arena-controls">
           <button class="icon-button sound-toggle" aria-label="Turn sound off" aria-pressed="true"><svg><use href="#i-sound"/></svg></button>
           <button class="icon-button haptic-toggle" aria-label="Turn haptics off" aria-pressed="true"><svg><use href="#i-haptic"/></svg></button>
@@ -56,12 +56,14 @@
           <div class="overlay-card"><span class="eyebrow">TAKE A BREATHER</span><h2>TIME OUT.</h2><p>Your opening will be here.</p><button class="primary-button" id="resume-button">BACK TO IT <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="quit-button">Back to the sideline</button></div>
         </div>
         <div class="game-overlay" id="over-overlay" hidden>
-          <div class="overlay-card result-card"><span class="eyebrow" id="result-eyebrow">GOOD RUN. GO AGAIN.</span><h2>THAT’S<br>THE PLAY.</h2><span class="result-score-label">FINAL SCORE</span><strong id="final-score">0</strong><div class="result-stats"><div><strong id="final-distance">0</strong><span>YARDS</span></div><div><strong id="final-gaps">0</strong><span>GAPS CLEARED</span></div></div><button class="primary-button" id="retry-button">RUN IT BACK <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="menu-button">Change difficulty</button></div>
+          <div class="overlay-card result-card"><span class="eyebrow" id="result-eyebrow">GOOD RUN. GO AGAIN.</span><h2>TACKLED.</h2><span class="result-score-label">FINAL SCORE</span><strong id="final-score">0</strong>
+          <div class="score-breakdown"><div><span>DODGE SCORE</span><strong id="final-dodge-score">0</strong></div><div><span>TOUCHDOWN SCORE</span><strong id="final-touchdown-score">0</strong></div></div>
+          <div class="result-stats"><div><strong id="final-dodges">0</strong><span>DODGES</span></div><div><strong id="final-touchdowns">0</strong><span>TOUCHDOWNS</span></div></div><button class="primary-button" id="retry-button">RUN IT BACK <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="menu-button">Change difficulty</button></div>
         </div>
       </div>
     </section>
   </main>
-  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>Swipe or drag anywhere in any direction.</strong> Your blue cylinder follows each swipe smoothly. Move up, down, left, right, or diagonally. All four arrow keys and W / A / S / D work too.</p><p>The pitch advances automatically. Red cylinders <strong>rush toward you from mixed, random directions.</strong> Read the arrows and dodge their tackle. As you pull away, beaten defenders slow down and fall behind.</p><p>Pass cleanly between two defenders for <strong class="lime">+50</strong>. One collision ends the run. Easy gives you fewer attackers, Medium adds pressure, and Hardcore brings the biggest rush. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>You run upfield automatically.</strong> Swipe or drag anywhere to cut left, right, up, down, or diagonally. Up speeds your run; down slows it. Release to keep running straight. Arrow keys and W / A / S / D work too.</p><p>Defenders arrive at different times from random directions and <strong>keep chasing you.</strong> Cut around them and pull away to leave them behind.</p><p>A close defender evaded earns <strong class="lime">+50 DODGE</strong>. Cross the end zone for <strong class="lime">+500 TOUCHDOWN</strong> and a new field. One tackle ends your run. Difficulty changes the pressure from defenders. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
   <div class="sr-only" id="announcer" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

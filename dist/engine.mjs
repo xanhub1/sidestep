@@ -1,168 +1,114 @@
-export const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
-export const FIELD={halfWidth:7.1,playerRadius:.34,enemyRadius:.37,maxSpeed:15.5,response:.026};
-export const VIEW={width:15.2,verticalScale:.92,anchor:.44};
-export const DIFFICULTIES={
-  easy:{speed:.9,count:-.25,interval:1.22,aggression:.7,progression:.6,forward:13,capacity:12,maxCount:4,commitLead:.4},
-  medium:{speed:1.03,count:.65,interval:1,aggression:1,progression:1,forward:15.5,capacity:20,maxCount:6,commitLead:.32},
-  hardcore:{speed:1.3,count:1.5,interval:.78,aggression:1.35,progression:1.5,forward:18.8,capacity:28,maxCount:8,commitLead:.26},
-};
-const lerp=(a,b,t)=>a+(b-a)*t;
-const stages=[[0,2.5],[500,3.25],[1000,4.25],[2000,5.25],[4000,6.25],[7000,7.25],[14000,8]];
-export function tuning(score,difficulty='medium'){
-  const d=DIFFICULTIES[difficulty],p=Math.max(0,score)*d.progression;
-  let count=8;
-  for(let i=1;i<stages.length;i++)if(p<=stages[i][0]){const a=stages[i-1],b=stages[i];count=lerp(a[1],b[1],(p-a[0])/(b[0]-a[0]));break;}
-  const pressure=1-Math.exp(-p/4300);
-  return {speed:Math.min(12.4,(6.9+2*pressure)*d.speed),count:clamp(count+d.count,2,d.maxCount),
-    interval:Math.max(.6,(1.3-.4*pressure)*d.interval),aggression:(.14+.12*pressure)*d.aggression,
-    forward:d.forward*(1+.15*pressure),capacity:d.capacity,commitLead:d.commitLead,pressure};
+// World coordinates: +z runs upfield. Camera motion never changes actor physics.
+export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, playerRadius:.36, enemyRadius:.4, steerSpeed:11.5 });
+export const VIEW = Object.freeze({ width:16.5, verticalScale:.94, anchor:.46, perspective:.0035 });
+export const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const mix=(a,b,t)=>a+(b-a)*t;
+const damp=(dt,response)=>1-Math.exp(-dt/response);
+const limited=(x,z,max)=>{const d=Math.hypot(x,z);return d>max?{x:x/d*max,z:z/d*max}:{x,z};};
+export function tuning(score=0,difficulty='medium'){
+  const mode={easy:{forward:10.4,speed:6.2,interval:1.65,capacity:14},medium:{forward:11,speed:7.2,interval:1.26,capacity:22},hardcore:{forward:11.5,speed:8.5,interval:.96,capacity:30}}[difficulty]??{forward:11,speed:7.2,interval:1.26,capacity:22};
+  const pressure=clamp(score/4500,0,1);
+  return {...mode,speed:Math.min(10.2,mode.speed+pressure*1.4),interval:mode.interval*(1-pressure*.35),pressure};
+}
+export function projectPoint(x,z,camera,width,height){
+  const depth=z-camera.z,s=1/(1+clamp(depth,-65,90)*VIEW.perspective),unit=width/VIEW.width;
+  return {x:width/2+(x-camera.x)*unit*s,y:height*VIEW.anchor-depth*unit*VIEW.verticalScale*s,s};
+}
+export function visibleWorld(camera,width,height){
+  const unit=width/VIEW.width;
+  const depth=y=>{const q=(height*VIEW.anchor-y)/(unit*VIEW.verticalScale);return q/(1-VIEW.perspective*q);};
+  return {minZ:camera.z+depth(height),maxZ:camera.z+depth(0)};
 }
 export function sweptHit(ax,az,bx,bz,radius){
-  const dx=bx-ax,dz=bz-az,t=clamp(-(ax*dx+az*dz)/(dx*dx+dz*dz||1),0,1);
-  return Math.hypot(ax+dx*t,az+dz*t)<radius;
+  const dx=bx-ax,dz=bz-az,length=dx*dx+dz*dz,t=length?clamp(-(ax*dx+az*dz)/length,0,1):0;
+  return Math.hypot(ax+dx*t,az+dz*t)<=radius;
 }
-export function viewportBounds(width,height){
-  const unit=width/VIEW.width*VIEW.verticalScale,margin=FIELD.playerRadius+.1;
-  return {minX:-FIELD.halfWidth+margin,maxX:FIELD.halfWidth-margin,
-    minZ:(height*VIEW.anchor-height+22)/unit+margin,maxZ:(height*VIEW.anchor-22)/unit-margin};
+export function createDefender({id,x,z,speed=7.2,stage=0,pattern='intercept',anticipation=.22,phase=0}){
+  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,stage,pattern,anticipation,phase,age:0,closestDistance:Infinity,threatened:false,rewarded:false,retired:false,opacity:0};
 }
-function limited(x,z,max){const length=Math.hypot(x,z);return length>max?{x:x/length*max,z:z/length*max}:{x,z};}
-
 export class Game{
-  constructor({random=Math.random,onEvent=()=>{}}={}){this.random=random;this.onEvent=onEvent;this.bounds=viewportBounds(390,693);this.reset('medium');}
-  reset(difficulty=this.difficulty){
-    this.difficulty=DIFFICULTIES[difficulty]?difficulty:'medium';this.time=0;this.distance=0;this.bonus=0;this.score=0;this.gaps=0;this.alive=true;
-    this.player={x:0,z:0,prevX:0,prevZ:0,vx:0,vz:0,targetX:0,targetZ:0,glow:0};this.enemies=[];this.warnings=[];this.gapPairs=new Map();
-    this.nextRush=.05;this.rushID=0;this.dragging=false;this.keyboard={x:0,z:0};this.events=[];
+  constructor({random=Math.random,onEvent=()=>{}}={}){this.random=random;this.onEvent=onEvent;this.width=390;this.height=844;this.reset('medium');}
+  reset(difficulty=this.difficulty??'medium'){
+    this.difficulty=difficulty;this.alive=true;this.time=0;this.distance=0;this.score=0;this.dodgeScore=0;this.touchdownScore=0;this.dodges=0;this.touchdowns=0;
+    this.player={x:-2.5,z:0,prevX:-2.5,prevZ:0,vx:0,vz:tuning(0,difficulty).forward,controlVX:0,controlVZ:0,targetX:-2.5,targetZ:0,glow:0};
+    this.camera={x:-2,z:4,prevX:-2,prevZ:4};this.enemies=[];this.warnings=[];this.nextSpawn=.2;this.spawnID=0;this.recentEdges=[];this.dragging=false;this.keyboard={x:0,z:0};this.events=[];
   }
-  setViewport(width,height){
-    this.bounds=viewportBounds(width,height);const p=this.player,b=this.bounds;
-    p.x=clamp(p.x,b.minX,b.maxX);p.z=clamp(p.z,b.minZ,b.maxZ);p.targetX=clamp(p.targetX,b.minX,b.maxX);p.targetZ=clamp(p.targetZ,b.minZ,b.maxZ);
-    p.prevX=p.x;p.prevZ=p.z;
-    for(const w of this.warnings){const pos=this.spawnPosition(w.enemy.spawnAngle);w.enemy.x=pos.x;w.enemy.z=pos.z;w.enemy.edge=pos.edge;w.remaining=w.duration;}
-  }
+  setViewport(width,height){this.width=width;this.height=height;}
   emit(type,detail={}){const event={type,...detail};this.events.push(event);this.onEvent(event);}
-  steer(dx,dz=0){this.dragging=true;const p=this.player,b=this.bounds;p.targetX=clamp(p.targetX+dx,b.minX,b.maxX);p.targetZ=clamp(p.targetZ+dz,b.minZ,b.maxZ);}
+  steer(dx,dz=0){const p=this.player;this.dragging=true;p.targetX=clamp(p.targetX+dx,-FIELD.halfWidth+FIELD.playerRadius,FIELD.halfWidth-FIELD.playerRadius);p.targetZ=clamp(p.targetZ+dz,p.z-4.5,p.z+4.5);}
   release(){this.dragging=false;this.player.targetX=this.player.x;this.player.targetZ=this.player.z;}
-  spawnPosition(angle){
-    const p=this.player,b=this.bounds,dx=Math.cos(angle),dz=Math.sin(angle),outerX=VIEW.width/2+1;
-    const tx=Math.abs(dx)<1e-8?Infinity:((dx>0?outerX:-outerX)-p.x)/dx;
-    const tz=Math.abs(dz)<1e-8?Infinity:((dz>0?b.maxZ+2:b.minZ-2)-p.z)/dz;
-    const distance=Math.min(tx,tz);
-    return {x:p.x+dx*distance,z:p.z+dz*distance,edge:tx<tz?(dx>0?'east':'west'):(dz>0?'north':'south')};
-  }
-  planRush(){
-    const t=tuning(this.score,this.difficulty),budget=t.capacity-this.enemies.length-this.warnings.length;
-    if(budget<=0)return;
-    const wanted=Math.min(budget,Math.floor(t.count)+(this.random()<t.count%1?1:0)),id=++this.rushID,entries=[];
-    for(let i=0;i<wanted;i++){
-      let pos,angle,accepted=false;
-      for(let attempt=0;attempt<32;attempt++){
-        angle=this.random()*Math.PI*2;pos=this.spawnPosition(angle);
-        const sameEdge=i===wanted-1&&i>0&&entries.every(e=>e.edge===pos.edge);
-        const crowded=[...entries,...this.warnings.map(w=>w.enemy)].some(e=>Math.hypot(e.x-pos.x,e.z-pos.z)<1.4);
-        if(!sameEdge&&!crowded){accepted=true;break;}
-      }
-      if(!accepted)continue;
-      const dx=this.player.x-pos.x,dz=this.player.z-pos.z,length=Math.hypot(dx,dz)||1,inward={x:dx/length,z:dz/length};
-      const speed=Math.min(12.4,t.speed*(.92+this.random()*.16));
-      const enemy={id:`${id}-${i}`,...pos,prevX:pos.x,prevZ:pos.z,spawnAngle:angle,vx:inward.x*speed*.8,vz:inward.z*speed*.8,speed,
-        tangent:{x:-inward.z,z:inward.x},attackOffset:(this.random()-.5)*.45,anticipation:t.aggression,
-        pattern:this.random()<.45?'intercept':'pursuit',phase:this.random()*Math.PI*2,commitLead:t.commitLead,
-        mode:'approach',age:0,chargeAge:0,chargeDuration:.16,closestDistance:length,engaged:false,separationTime:0,trailAge:0,fatigue:1,active:false,retired:false,opacity:1};
-      const delay=i===0?0:.04+i*.025+this.random()*.18;
-      entries.push(enemy);this.warnings.push({enemy,remaining:.7+delay,duration:.7,visible:delay===0});
-    }
-    this.emit('rush',{id,count:entries.length,edges:entries.map(e=>e.edge)});
-  }
   updatePlayer(dt){
-    const p=this.player,b=this.bounds,k=this.keyboard,oldX=p.x,oldZ=p.z;
-    const desired=k.x||k.z?limited(k.x*FIELD.maxSpeed,k.z*FIELD.maxSpeed,FIELD.maxSpeed):
-      this.dragging?limited((p.targetX-p.x)*48,(p.targetZ-p.z)*48,FIELD.maxSpeed):{x:0,z:0};
-    // A short filter rounds out steering changes while keeping the first input frame responsive.
-    const blend=1-Math.exp(-dt/(this.dragging||k.x||k.z?FIELD.response:.018));
-    p.vx+=(desired.x-p.vx)*blend;p.vz+=(desired.z-p.vz)*blend;
-    p.x=clamp(p.x+p.vx*dt,b.minX,b.maxX);p.z=clamp(p.z+p.vz*dt,b.minZ,b.maxZ);
-    if(this.dragging&&!k.x&&!k.z){
-      if((p.targetX-oldX)*(p.targetX-p.x)<=0){p.x=p.targetX;p.vx=0;}
-      if((p.targetZ-oldZ)*(p.targetZ-p.z)<=0){p.z=p.targetZ;p.vz=0;}
-    }
-    if((p.x<=b.minX&&p.vx<0)||(p.x>=b.maxX&&p.vx>0))p.vx=0;
-    if((p.z<=b.minZ&&p.vz<0)||(p.z>=b.maxZ&&p.vz>0))p.vz=0;
-    if(!this.dragging){p.targetX=p.x;p.targetZ=p.z;}
+    const p=this.player,k=this.keyboard,forward=tuning(this.score,this.difficulty).forward;
+    p.targetZ+=forward*dt;
+    const desired=k.x||k.z?limited(k.x*FIELD.steerSpeed,k.z*FIELD.steerSpeed,FIELD.steerSpeed):this.dragging?limited((p.targetX-p.x)*20,(p.targetZ-p.z-forward*dt)*20,FIELD.steerSpeed):{x:0,z:0};
+    const blend=damp(dt,this.dragging?.024:.038);
+    p.controlVX=mix(p.controlVX,desired.x,blend);p.controlVZ=mix(p.controlVZ,desired.z,blend);
+    p.vx=p.controlVX;p.vz=forward+p.controlVZ;
+    p.x=clamp(p.x+p.vx*dt,-FIELD.halfWidth+FIELD.playerRadius,FIELD.halfWidth-FIELD.playerRadius);p.z+=p.vz*dt;
+    if((p.x<=-FIELD.halfWidth+FIELD.playerRadius&&p.vx<0)||(p.x>=FIELD.halfWidth-FIELD.playerRadius&&p.vx>0))p.vx=p.controlVX=0;
+    if(!this.dragging||k.x||k.z){p.targetX=p.x;p.targetZ=p.z;}
     p.glow=Math.max(0,p.glow-dt*2.4);
   }
-  updateEnemy(e,dt){
-    const p=this.player,dxPlayer=p.x-e.x,dzPlayer=p.z-e.z,distance=Math.hypot(dxPlayer,dzPlayer)||.001;
-    e.age+=dt;e.closestDistance=Math.min(e.closestDistance??distance,distance);
-    if(distance<Math.max(4.2,e.speed*.55))e.engaged=true;
-    if(e.engaged&&distance>2.3&&distance>e.closestDistance+1.1)e.separationTime=(e.separationTime??0)+dt;
-    else e.separationTime=Math.max(0,(e.separationTime??0)-dt*2);
-    if(e.mode!=='trailing'&&e.separationTime>.12){e.mode='trailing';e.trailAge=0;}
-    if(e.mode==='trailing'){
-      e.trailAge=(e.trailAge??0)+dt;
-      const lost=clamp((distance-e.closestDistance)/8,0,1),effort=.4-.28*lost;
-      e.fatigue=(e.fatigue??1)+(effort-(e.fatigue??1))*(1-Math.exp(-dt/.38));
-      const chaseSpeed=e.speed*e.fatigue,fieldDrift=tuning(this.score,this.difficulty).forward*.34;
-      const trailingVelocity=limited(dxPlayer/distance*chaseSpeed,Math.min(-.8,dzPlayer/distance*chaseSpeed-fieldDrift),Math.max(.8,chaseSpeed));
-      e.desiredVX=trailingVelocity.x;e.desiredVZ=trailingVelocity.z;
-    }else if(e.mode==='approach'||e.mode==='chase'){
-      const lead=e.pattern==='intercept'?e.anticipation:.035;
-      const aimX=p.x+p.vx*lead+e.tangent.x*e.attackOffset,aimZ=p.z+p.vz*lead+e.tangent.z*e.attackOffset;
-      const dx=aimX-e.x,dz=aimZ-e.z,length=Math.hypot(dx,dz)||1;
-      const chaseSpeed=e.speed*(e.mode==='chase'?.85:1);
-      e.desiredVX=dx/length*chaseSpeed;e.desiredVZ=dz/length*chaseSpeed;
-      if(e.mode==='approach'&&(distance<Math.max(2.4,e.speed*(e.commitLead??.32))||e.age>7)){e.mode='charge';e.chargeVX=e.desiredVX;e.chargeVZ=e.desiredVZ;}
-    }else{
-      e.chargeAge+=dt;e.desiredVX=e.chargeVX;e.desiredVZ=e.chargeVZ;
-      if(e.chargeAge>=(e.chargeDuration??.16))e.mode='chase';
-    }
-    const response=e.mode==='trailing'?.3:.1,acceleration=e.mode==='trailing'?24:70;
-    const blend=1-Math.exp(-dt/response),change=limited((e.desiredVX-e.vx)*blend,(e.desiredVZ-e.vz)*blend,acceleration*dt);
-    e.vx+=change.x;e.vz+=change.z;e.x+=e.vx*dt;e.z+=e.vz*dt;
-    const b=this.bounds,out=e.x<-VIEW.width/2-1.5||e.x>VIEW.width/2+1.5||e.z<b.minZ-3||e.z>b.maxZ+3;
-    e.opacity=clamp((9.5-e.age)/.3,0,1);
-    if(e.age>9.5||(e.age>.5&&out))e.retired=true;
+  updateCamera(dt){
+    const c=this.camera,p=this.player;c.prevX=c.x;c.prevZ=c.z;
+    c.x=mix(c.x,clamp(p.x+.45,-6.8,6.8),damp(dt,.20));c.z=mix(c.z,p.z+.45,damp(dt,.14));
   }
-  updateGaps(){
-    const p=this.player,clear=FIELD.playerRadius+FIELD.enemyRadius+.08,active=this.enemies.filter(e=>e.active&&!e.retired);
-    for(let i=0;i<active.length;i++)for(let j=i+1;j<active.length;j++){
-      const [a,b]=active[i].id<active[j].id?[active[i],active[j]]:[active[j],active[i]],key=`${a.id}:${b.id}`;
-      const length=Math.hypot(b.x-a.x,b.z-a.z);
-      if(length<clear*2||length>6.6)continue;
-      if(!this.gapPairs.has(key))this.gapPairs.set(key,{left:a,right:b,previous:null,candidate:null,done:false});
-    }
-    for(const [key,pair] of this.gapPairs){
-      const a=pair.left,b=pair.right;if(a.retired||b.retired){this.gapPairs.delete(key);continue;}if(pair.done)continue;
-      const dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
-      if(length<clear*2||length>6.6){pair.candidate=null;pair.previous=null;continue;}
-      const tx=dx/length,tz=dz/length;
-      const sample={side:(p.x-a.x)*(-tz)+(p.z-a.z)*tx,along:(p.x-a.x)*tx+(p.z-a.z)*tz};
-      const blocked=Math.abs(sample.side)<clear&&active.some(e=>{if(e===a||e===b)return false;const along=(e.x-a.x)*tx+(e.z-a.z)*tz;return along>0&&along<length&&Math.abs((e.x-a.x)*(-tz)+(e.z-a.z)*tx)<clear;});
-      const previous=pair.previous,inside=sample.along>clear&&sample.along<length-clear&&!blocked;
-      if(previous&&!pair.candidate&&Math.abs(previous.side)>clear&&Math.abs(sample.side)<=clear)pair.candidate={from:Math.sign(previous.side),crossed:false,valid:inside};
-      const candidate=pair.candidate;
-      if(candidate){
-        if(Math.abs(sample.side)<=clear&&!inside)candidate.valid=false;
-        if(sample.side*candidate.from<0)candidate.crossed=true;
-        if(candidate.crossed&&sample.side*candidate.from<-clear){
-          pair.done=true;
-          if(candidate.valid){this.bonus+=50;this.gaps++;p.glow=1;this.score=Math.floor(this.distance*4)+this.bonus;this.emit('gap',{points:50,x:(a.x+b.x)/2,z:(a.z+b.z)/2,pair:key});}
-        }else if(sample.side*candidate.from>clear)pair.candidate=null;
+  planArrival(){
+    const tune=tuning(this.score,this.difficulty);if(this.enemies.length+this.warnings.length>=tune.capacity)return;
+    const p=this.player,view=visibleWorld(this.camera,this.width,this.height);
+    // Keep directions random without allowing long runs of identical entrances.
+    const excluded=this.recentEdges.length===2&&this.recentEdges[0]===this.recentEdges[1]?this.recentEdges[0]:null;
+    const choices=[['north',.56],['west',.19],['east',.19],['south',.06]].filter(([edge])=>edge!==excluded);
+    let roll=this.random()*choices.reduce((sum,[,weight])=>sum+weight,0),edge='north';
+    if(this.spawnID>0)for(const [candidate,weight] of choices){roll-=weight;if(roll<=0){edge=candidate;break;}}
+    this.recentEdges.push(edge);if(this.recentEdges.length>2)this.recentEdges.shift();
+    let x,z;
+    if(edge==='north'){x=clamp(p.x+(this.random()-.5)*17,-11.5,11.5);z=Math.max(p.z+24,view.maxZ+3)+this.random()*4;}
+    else if(edge==='west'||edge==='east'){x=(edge==='west'?-1:1)*12.6;z=p.z+10+this.random()*15;}
+    else{x=clamp(p.x+(this.random()-.5)*16,-11.5,11.5);z=view.minZ-3;}
+    const enemy=createDefender({id:++this.spawnID,x,z,speed:tune.speed*(.94+this.random()*.12),stage:Math.max(0,Math.floor((z+FIELD.endZone)/FIELD.stride)),pattern:this.random()<.6?'intercept':'pursuit',anticipation:.16+this.random()*.16,phase:this.random()*Math.PI*2});
+    enemy.edge=edge;
+    const dx=p.x-x,dz=p.z-z,d=Math.hypot(dx,dz)||1;enemy.vx=dx/d*enemy.speed;enemy.vz=dz/d*enemy.speed;
+    this.warnings.push({enemy,remaining:.65,duration:.65,visible:true});this.emit('incoming',{id:enemy.id,edge});
+  }
+  updateEnemy(e,dt){
+    const p=this.player,dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz),lead=e.pattern==='intercept'?e.anticipation:.04;
+    e.age+=dt;e.closestDistance=Math.min(e.closestDistance,distance);
+    if(distance<2.15&&dz<.5)e.threatened=true;
+    // A beaten defender still runs toward the player. Relative world speed creates the fall-behind.
+    const stamina=1-.24*clamp((dz-2)/12,0,1),aimX=dx+p.vx*lead,aimZ=dz+p.vz*lead,length=Math.hypot(aimX,aimZ)||1;
+    const desiredX=aimX/length*e.speed*stamina,desiredZ=aimZ/length*e.speed*stamina,blend=damp(dt,.18);
+    const change=limited((desiredX-e.vx)*blend,(desiredZ-e.vz)*blend,38*dt);
+    e.vx+=change.x;e.vz+=change.z;e.x+=e.vx*dt;e.z+=e.vz*dt;e.opacity=clamp(e.age/.16,0,1);
+    const view=visibleWorld(this.camera,this.width,this.height);
+    if(e.z<view.minZ-10||Math.abs(e.x)>FIELD.halfWidth+12)e.retired=true;
+  }
+  updateDodges(){
+    const p=this.player;
+    for(const e of this.enemies){
+      const distance=Math.hypot(p.x-e.x,p.z-e.z);
+      if(!e.rewarded&&e.threatened&&e.closestDistance>FIELD.playerRadius+FIELD.enemyRadius&&p.z-e.z>1.35&&distance>1.6&&distance>e.closestDistance+.3){
+        e.rewarded=true;this.dodges++;this.dodgeScore+=50;this.score=this.dodgeScore+this.touchdownScore;p.glow=1;this.emit('dodge',{points:50,x:e.x,z:e.z,id:e.id});
       }
-      pair.previous=sample;
     }
+  }
+  updateTouchdowns(){
+    while(this.distance>=this.touchdowns*FIELD.stride+FIELD.length){this.touchdowns++;this.touchdownScore+=500;this.score=this.dodgeScore+this.touchdownScore;this.player.glow=1;this.emit('touchdown',{points:500,stage:this.touchdowns,x:this.player.x,z:this.player.z});}
   }
   update(dt){
-    if(!this.alive)return;this.events=[];this.time+=dt;const p=this.player,oldX=p.x,oldZ=p.z;
-    p.prevX=oldX;p.prevZ=oldZ;this.updatePlayer(dt);const tune=tuning(this.score,this.difficulty);
-    this.distance+=tune.forward*dt;this.score=Math.floor(this.distance*4)+this.bonus;
-    this.nextRush-=dt;if(this.nextRush<=0){this.planRush();this.nextRush=tune.interval;}
-    for(const warning of this.warnings){warning.remaining-=dt;warning.visible=warning.remaining<=warning.duration;if(warning.remaining<=0){const e=warning.enemy;e.active=true;this.enemies.push(e);this.emit('arrival',{id:e.id,edge:e.edge});}}
+    if(!this.alive)return;this.events=[];this.time+=dt;const p=this.player,oldX=p.x,oldZ=p.z;p.prevX=oldX;p.prevZ=oldZ;
+    this.updatePlayer(dt);this.updateCamera(dt);this.distance=Math.max(this.distance,p.z);
+    this.nextSpawn-=dt;
+    if(this.nextSpawn<=0){this.planArrival();this.nextSpawn=tuning(this.score,this.difficulty).interval*(.78+this.random()*.44);}
+    for(const warning of this.warnings){
+      warning.remaining-=dt;
+      if(warning.remaining<=0){const e=warning.enemy;if(Math.hypot(e.x-p.x,e.z-p.z)>3.2){this.enemies.push(e);this.emit('arrival',{id:e.id,edge:e.edge});}}
+    }
     this.warnings=this.warnings.filter(w=>w.remaining>0);
-    for(const e of this.enemies){const ex=e.x,ez=e.z;e.prevX=ex;e.prevZ=ez;this.updateEnemy(e,dt);
+    for(const e of this.enemies){
+      const ex=e.x,ez=e.z;e.prevX=ex;e.prevZ=ez;this.updateEnemy(e,dt);
       if(sweptHit(ex-oldX,ez-oldZ,e.x-p.x,e.z-p.z,FIELD.playerRadius+FIELD.enemyRadius)){this.alive=false;this.emit('collision',{x:p.x,z:p.z});return;}
     }
-    this.updateGaps();this.enemies=this.enemies.filter(e=>!e.retired);
+    this.updateDodges();this.updateTouchdowns();this.enemies=this.enemies.filter(e=>!e.retired);
   }
 }
