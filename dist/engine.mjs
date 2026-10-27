@@ -1,7 +1,8 @@
 // World coordinates: +z runs upfield. Camera motion never changes actor physics.
-export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, playerRadius:.36, enemyRadius:.4, steerSpeed:11.5 });
+export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, unitsPerYard:2, playerRadius:.36, enemyRadius:.4, steerSpeed:11.5 });
+export const PACE=.8;
 export const VIEW = Object.freeze({ width:16.5, verticalScale:.94, anchor:.46, perspective:.0035, startY:.90, startLineY:.985, topY:.075, bottomY:.94, leftX:.045, rightX:.955 });
-const MODES={easy:{forward:10.4,speed:6.2,interval:2.5,groupSize:2,capacity:14,startStage:0},medium:{forward:12.8,speed:9.4,interval:2.15,groupSize:3,capacity:24,startStage:1},hardcore:{forward:15.2,speed:12,interval:1.8,groupSize:4,capacity:32,startStage:2}};
+const MODES={easy:{forward:10.4,speed:6.2,pursuitRatio:.94,interval:2.5,groupSize:2,capacity:14,startStage:0},medium:{forward:12.8,speed:9.4,pursuitRatio:.96,interval:2.15,groupSize:3,capacity:24,startStage:1},hardcore:{forward:15.2,speed:12,pursuitRatio:.98,interval:1.8,groupSize:4,capacity:32,startStage:2}};
 const STAGES=[
   {name:'RED DEFENSE',turf:'#4c8b35',endZone:'#3c782d',body:['#9e2226','#e83b36','#ff6352','#a92328'],cap:['#ffb39b','#ff8c74','#e65349'],warning:'#ef4937'},
   {name:'WHITE DEFENSE',turf:'#a47849',endZone:'#8e633b',body:['#a9ada0','#e6e7d6','#fffff0','#b7bcab'],cap:['#fffff4','#f5f6e6','#c8ceba'],warning:'#fff3c7'},
@@ -15,7 +16,8 @@ const limited=(x,z,max)=>{const d=Math.hypot(x,z);return d>max?{x:x/d*max,z:z/d*
 export function tuning(score=0,difficulty='medium'){
   const mode=MODES[difficulty]??MODES.medium;
   const pressure=clamp(score/4500,0,1);
-  return {...mode,speed:Math.min(mode.forward-.8,mode.speed+pressure*1.4),interval:mode.interval*(1-pressure*.35),pressure};
+  const forward=mode.forward*PACE;
+  return {...mode,forward,speed:Math.min(mode.forward-.8,mode.speed+pressure*1.4)*PACE,pursuitSpeed:forward*mode.pursuitRatio,interval:mode.interval/ PACE*(1-pressure*.35),pressure};
 }
 export function depthAtScreenY(y,width,height){const q=(height*VIEW.anchor-y)/(width/VIEW.width*VIEW.verticalScale);return q/(1-VIEW.perspective*q);}
 export function unprojectPoint(x,y,camera,width,height){const depth=depthAtScreenY(y,width,height);return {x:camera.x+(x-width/2)/(width/VIEW.width)*(1+depth*VIEW.perspective),z:camera.z+depth};}
@@ -30,13 +32,13 @@ export function sweptHit(ax,az,bx,bz,radius){
   const dx=bx-ax,dz=bz-az,length=dx*dx+dz*dz,t=length?clamp(-(ax*dx+az*dz)/length,0,1):0;
   return Math.hypot(ax+dx*t,az+dz*t)<=radius;
 }
-export function createDefender({id,x,z,speed=7.2,stage=0,pattern='intercept',anticipation=.22,phase=0}){
-  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,stage,pattern,anticipation,phase,age:0,closestDistance:Infinity,threatened:false,rewarded:false,retired:false,opacity:0};
+export function createDefender({id,x,z,speed=7.2,pursuitSpeed=speed,stage=0,pattern='intercept',anticipation=.22,phase=0}){
+  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,pursuitSpeed,stage,pattern,anticipation,phase,age:0,closestDistance:Infinity,threatened:false,rewarded:false,retired:false,opacity:0};
 }
 export class Game{
   constructor({random=Math.random,onEvent=()=>{}}={}){this.random=random;this.onEvent=onEvent;this.width=390;this.height=844;this.reset('medium');}
   reset(difficulty=this.difficulty??'medium'){
-    this.difficulty=difficulty;this.alive=true;this.time=0;this.distance=0;this.score=0;this.dodgeScore=0;this.touchdownScore=0;this.dodges=0;this.touchdowns=0;
+    this.difficulty=difficulty;this.alive=true;this.time=0;this.distance=0;this.score=0;this.runScore=0;this.dodgeScore=0;this.touchdownScore=0;this.dodges=0;this.touchdowns=0;
     const mode=tuning(0,difficulty);this.startStage=mode.startStage;
     const cameraZ=-depthAtScreenY(this.height*VIEW.startLineY,this.width,this.height),z=cameraZ+depthAtScreenY(this.height*VIEW.startY,this.width,this.height);
     this.startZ=z;this.furthestZ=z;
@@ -103,7 +105,8 @@ export class Game{
     }
     if(!spaced)return null;
     this.recentEdges.push(edge);if(this.recentEdges.length>2)this.recentEdges.shift();
-    const enemy=createDefender({id:++this.spawnID,x,z,speed:tune.speed*(.94+this.random()*.12),stage:this.startStage+Math.max(0,Math.floor((z+FIELD.endZone)/FIELD.stride)),pattern:this.random()<.6?'intercept':'pursuit',anticipation:.16+this.random()*.16,phase:this.random()*Math.PI*2});
+    const variation=.94+this.random()*.12;
+    const enemy=createDefender({id:++this.spawnID,x,z,speed:tune.speed*variation,pursuitSpeed:Math.min(tune.forward*.995,tune.pursuitSpeed*(1+(variation-1)/6)),stage:this.startStage+Math.max(0,Math.floor((z+FIELD.endZone)/FIELD.stride)),pattern:this.random()<.6?'intercept':'pursuit',anticipation:.16+this.random()*.16,phase:this.random()*Math.PI*2});
     enemy.edge=edge;
     enemy.rushID=rushID;
     const dx=p.x-x,dz=p.z-z,d=Math.hypot(dx,dz)||1;enemy.vx=dx/d*enemy.speed;enemy.vz=dz/d*enemy.speed;
@@ -113,9 +116,10 @@ export class Game{
     const p=this.player,dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz),lead=e.pattern==='intercept'?e.anticipation:.04;
     e.age+=dt;e.closestDistance=Math.min(e.closestDistance,distance);
     if(distance<2.15&&dz<.5)e.threatened=true;
-    // A beaten defender still runs toward the player. Relative world speed creates the fall-behind.
-    const stamina=1-.24*clamp((dz-2)/12,0,1),aimX=dx+p.vx*lead,aimZ=dz+p.vz*lead,length=Math.hypot(aimX,aimZ)||1;
-    const desiredX=aimX/length*e.speed*stamina,desiredZ=aimZ/length*e.speed*stamina,blend=damp(dt,.18);
+    // Passed defenders settle into a near-running-speed chase instead of rapidly losing effort.
+    const chase=clamp((dz-.25)/2,0,1),stamina=1-.04*clamp((dz-12)/20,0,1),speed=mix(e.speed,e.pursuitSpeed??e.speed,chase)*stamina;
+    const aimX=dx+p.vx*lead,aimZ=dz+p.vz*lead,length=Math.hypot(aimX,aimZ)||1;
+    const desiredX=aimX/length*speed,desiredZ=aimZ/length*speed,blend=damp(dt,.18);
     const change=limited((desiredX-e.vx)*blend,(desiredZ-e.vz)*blend,38*dt);
     e.vx+=change.x;e.vz+=change.z;e.x+=e.vx*dt;e.z+=e.vz*dt;e.opacity=clamp(e.age/.16,0,1);
     const view=visibleWorld(this.camera,this.width,this.height);
@@ -126,12 +130,16 @@ export class Game{
     for(const e of this.enemies){
       const distance=Math.hypot(p.x-e.x,p.z-e.z);
       if(!e.rewarded&&e.threatened&&e.closestDistance>FIELD.playerRadius+FIELD.enemyRadius&&p.z-e.z>1.35&&distance>1.6&&distance>e.closestDistance+.3){
-        e.rewarded=true;this.dodges++;this.dodgeScore+=50;this.score=this.dodgeScore+this.touchdownScore;p.glow=1;this.emit('dodge',{points:50,x:e.x,z:e.z,id:e.id});
+        e.rewarded=true;this.dodges++;this.dodgeScore+=50;this.score=this.runScore+this.dodgeScore+this.touchdownScore;p.glow=1;this.emit('dodge',{points:50,x:e.x,z:e.z,id:e.id});
       }
     }
   }
   updateTouchdowns(){
-    while(this.furthestZ>=this.touchdowns*FIELD.stride+FIELD.length){this.touchdowns++;this.touchdownScore+=500;this.score=this.dodgeScore+this.touchdownScore;this.player.glow=1;this.emit('touchdown',{points:500,stage:this.startStage+this.touchdowns,x:this.player.x,z:this.player.z});}
+    while(this.furthestZ>=this.touchdowns*FIELD.stride+FIELD.length){this.touchdowns++;this.touchdownScore+=500;this.score=this.runScore+this.dodgeScore+this.touchdownScore;this.player.glow=1;this.emit('touchdown',{points:500,stage:this.startStage+this.touchdowns,x:this.player.x,z:this.player.z});}
+  }
+  updateRunScore(){
+    this.runScore=Math.floor(this.distance/FIELD.unitsPerYard+1e-8);
+    this.score=this.runScore+this.dodgeScore+this.touchdownScore;
   }
   update(dt){
     if(!this.alive)return;this.events=[];this.time+=dt;const p=this.player,oldX=p.x,oldZ=p.z;p.prevX=oldX;p.prevZ=oldZ;
@@ -149,6 +157,6 @@ export class Game{
       const ex=e.x,ez=e.z;e.prevX=ex;e.prevZ=ez;this.updateEnemy(e,dt);
       if(sweptHit(ex-oldX,ez-oldZ,e.x-p.x,e.z-p.z,FIELD.playerRadius+FIELD.enemyRadius)){this.alive=false;this.emit('collision',{x:p.x,z:p.z});return;}
     }
-    this.updateDodges();this.updateTouchdowns();this.enemies=this.enemies.filter(e=>!e.retired);
+    this.updateRunScore();this.updateDodges();this.updateTouchdowns();this.enemies=this.enemies.filter(e=>!e.retired);
   }
 }

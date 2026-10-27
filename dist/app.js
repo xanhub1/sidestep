@@ -53,7 +53,7 @@ function startRun(){
 function endRun(){
   clearInput();setState('over');
   const record=game.score>runBest;if(record){best[difficulty]=game.score;save('bests-v2',best);}
-  $('#final-score').textContent=game.score.toLocaleString();$('#final-dodge-score').textContent=game.dodgeScore.toLocaleString();$('#final-touchdown-score').textContent=game.touchdownScore.toLocaleString();
+  $('#final-score').textContent=game.score.toLocaleString();$('#final-run-score').textContent=game.runScore.toLocaleString();$('#final-dodge-score').textContent=game.dodgeScore.toLocaleString();$('#final-touchdown-score').textContent=game.touchdownScore.toLocaleString();
   $('#final-dodges').textContent=game.dodges;$('#final-touchdowns').textContent=game.touchdowns;
   $('#result-eyebrow').textContent=record?'A NEW PERSONAL BEST.':'GOOD RUN. GO AGAIN.';
   syncBest();$('#announcer').textContent=`Run over. ${game.score} points, ${game.dodges} dodges, ${game.touchdowns} touchdowns.`;
@@ -112,7 +112,7 @@ function frame(timestamp){
   if(state==='playing'){
     accumulator+=dt;
     while(accumulator>=1/120&&state==='playing'){game.update(1/120);accumulator-=1/120;}
-    const remaining=Math.max(0,Math.ceil((game.touchdowns*FIELD.stride+FIELD.length-game.player.z)/2));
+    const remaining=Math.max(0,Math.ceil((game.touchdowns*FIELD.stride+FIELD.length-game.player.z)/FIELD.unitsPerYard));
     $('#pace-badge').lastChild.textContent=` FIELD ${game.touchdowns+1} / ${remaining} YD TO GO`;
     if(game.time>6)$('#gesture-hint').style.opacity='0';
   }
