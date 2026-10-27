@@ -1,4 +1,4 @@
-import { Game, FIELD, VIEW } from './engine.mjs';
+import { Game, FIELD, tuning } from './engine.mjs';
 import { Renderer } from './renderer.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -29,7 +29,7 @@ function setState(next){
   $('#start-button').disabled=next!=='menu';$('#start-button span').textContent="LET'S PLAY";
   $$('.difficulty').forEach(b=>b.disabled=next!=='menu'&&next!=='over');
 }
-function setDifficulty(value){difficulty=value;save('difficulty',value);$$('.difficulty').forEach(b=>{const selected=b.dataset.difficulty===value;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',selected);});$('#mode-label').textContent=value.toUpperCase();syncBest();}
+function setDifficulty(value){difficulty=value;save('difficulty',value);$$('.difficulty').forEach(b=>{const selected=b.dataset.difficulty===value;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',selected);});$('#mode-label').textContent=value.toUpperCase();$('#mode-description').textContent={easy:'Red defense. Find your rhythm.',medium:'White defense. Faster from the first play.',hardcore:'Elite defense. Full pressure from the kickoff.'}[value];syncBest();}
 function updateToggles(){
   $$('.sound-toggle').forEach(b=>{b.setAttribute('aria-pressed',String(sound));b.setAttribute('aria-label',`Turn sound ${sound?'off':'on'}`);b.querySelector('use').setAttribute('href',sound?'#i-sound':'#i-mute');});
   $$('.haptic-toggle').forEach(b=>{b.setAttribute('aria-pressed',String(haptics));b.setAttribute('aria-label',`Turn haptics ${haptics?'off':'on'}`);});
@@ -83,7 +83,7 @@ window.addEventListener('pointermove',e=>{
   if(state!=='playing'||e.pointerId!==pointer)return;
   // Use the same relative sensitivity at every screen size.
   const dx=e.clientX-lastPointerX,dy=e.clientY-lastPointerY;lastPointerX=e.clientX;lastPointerY=e.clientY;
-  game.steer(dx/renderer.unit*.95,-dy/(renderer.unit*VIEW.verticalScale)*.95);e.preventDefault();
+  const delta=renderer.dragDelta(dx,dy,game.player);game.steer(delta.x,delta.z);e.preventDefault();
 },{passive:false});
 function releasePointer(e){if(e.pointerId!==pointer)return;pointer=null;game.release();}
 window.addEventListener('pointerup',releasePointer);window.addEventListener('pointercancel',releasePointer);canvas.addEventListener('lostpointercapture',releasePointer);
@@ -99,8 +99,9 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 
 function demo(time){
   const z=time*7,x=-2.5+Math.sin(time*.8)*.8;
-  return {camera:{x:x+.45,z:z+.5},player:{x,z,glow:0},enemies:[
-    {x:x+5,z:z+9},{x:x-3,z:z-4},{x:x+3,z:z-8},{x:x+2,z:z-11},{x:x-4,z:z+16}],warnings:[]};
+  const startStage=tuning(0,difficulty).startStage;
+  return {startStage,camera:{x:x+.45,z:z+.5},player:{x,z,glow:0},enemies:[
+    {x:x+5,z:z+9,stage:startStage},{x:x-3,z:z-4,stage:startStage},{x:x+3,z:z-8,stage:startStage},{x:x+2,z:z-11,stage:startStage},{x:x-4,z:z+16,stage:startStage}],warnings:[]};
 }
 function frame(timestamp){
   const dt=Math.min((timestamp-(lastTime||timestamp))/1000,.05);lastTime=timestamp;visualTime+=dt;

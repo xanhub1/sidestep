@@ -33,7 +33,7 @@
         <section class="intro" aria-label="Choose your game">
           <div class="eyebrow">OPEN FIELD. ALL INSTINCT.</div>
           <h1>FIND YOUR<br><em>OPENING.</em></h1>
-          <p class="intro-copy">Find your rhythm. Leave them behind.</p>
+          <p class="intro-copy" id="mode-description">White defense. Faster from the first play.</p>
           <div class="difficulty-heading"><span>CHOOSE YOUR PACE</span><span id="mode-label">MEDIUM</span></div>
           <div class="difficulty-options" role="group" aria-label="Difficulty">
             <button class="difficulty" data-difficulty="easy" aria-pressed="false"><span class="level-icon"><i></i></span><span>Easy</span><span class="choice-indicator"></span></button>
@@ -63,7 +63,7 @@
       </div>
     </section>
   </main>
-  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>You run upfield automatically.</strong> Swipe or drag anywhere to cut left, right, up, down, or diagonally. Up speeds your run; down slows it. Release to keep running straight. Arrow keys and W / A / S / D work too.</p><p>Defenders arrive at different times from random directions and <strong>keep chasing you.</strong> Cut around them and pull away to leave them behind.</p><p>A close defender evaded earns <strong class="lime">+50 DODGE</strong>. Cross the end zone for <strong class="lime">+500 TOUCHDOWN</strong> and a new field. One tackle ends your run. Difficulty changes the pressure from defenders. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>You run upfield automatically.</strong> Swipe or drag anywhere to cut left, right, up, down, or diagonally. Move freely up or down the screen. Release to keep your position as the pitch scrolls. Arrow keys and W / A / S / D work too.</p><p>Defenders arrive at different times from random directions and <strong>keep chasing you.</strong> Cut around them and pull away to leave them behind.</p><p>A close defender evaded earns <strong class="lime">+50 DODGE</strong>. Cross the end zone for <strong class="lime">+500 TOUCHDOWN</strong> and a new field. One tackle ends your run. Easy starts against red defenders. Medium starts at the faster white defense stage. Hardcore starts against the faster elite defense. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
   <div class="sr-only" id="announcer" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

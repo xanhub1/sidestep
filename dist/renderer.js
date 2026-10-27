@@ -1,4 +1,4 @@
-﻿import { FIELD, VIEW, projectPoint, visibleWorld, clamp } from './engine.mjs';
+import { FIELD, VIEW, projectPoint, unprojectPoint, visibleWorld, stageAppearance, clamp } from './engine.mjs';
 
 export class Renderer{
   constructor(canvas){
@@ -12,6 +12,7 @@ export class Renderer{
   }
   resize(){const r=this.canvas.getBoundingClientRect();this.w=r.width;this.h=r.height;this.unit=r.width/VIEW.width;const dpr=Math.min(devicePixelRatio||1,2.5);this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.ctx.setTransform(dpr,0,0,dpr,0,0);this.onResize?.(this.w,this.h);}
   project(x,z){return projectPoint(x,z,this.camera,this.w,this.h);}
+  dragDelta(dx,dy,player){const p=this.project(player.x,player.z),next=unprojectPoint(p.x+dx*.95,p.y+dy*.95,this.camera,this.w,this.h);return {x:next.x-player.x,z:next.z-player.z};}
   worldRect(x1,z1,x2,z2,color){
     const c=this.ctx,points=[[x1,z1],[x2,z1],[x2,z2],[x1,z2]].map(([x,z])=>this.project(x,z));
     c.fillStyle=color;c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();c.fill();
@@ -22,10 +23,10 @@ export class Renderer{
     const first=Math.max(0,Math.floor(low/FIELD.stride)),last=Math.max(first,Math.floor(high/FIELD.stride));
     for(let stage=first;stage<=last;stage++){
       const base=stage*FIELD.stride,start=stage===0?Math.min(-100,low):base,goal=base+FIELD.length,end=base+FIELD.stride;
-      const color=stage%2?'#a47849':'#4c8b35';
-      this.worldRect(-12,start,12,goal,color);
+      const appearance=stageAppearance(stage+(this.startStage??0));
+      this.worldRect(-12,start,12,goal,appearance.turf);
       for(let z=Math.max(start,Math.floor((low-base)/10)*10+base);z<Math.min(goal,high+10);z+=10)this.worldRect(-12,z,12,z+5,'#ffffff05');
-      this.worldRect(-12,goal,12,end,stage%2?'#8e633b':'#3c782d');
+      this.worldRect(-12,goal,12,end,appearance.endZone);
       for(let z=Math.max(base,Math.ceil((low-base)/10)*10+base);z<=Math.min(goal,high);z+=10){
         this.worldRect(-12,z-.095,12,z+.095,'#e7e7cf');
         const yard=Math.round((z-base)/2),number=yard<=50?yard:100-yard;
@@ -44,15 +45,15 @@ export class Renderer{
     const light=c.createLinearGradient(0,0,w,h);light.addColorStop(0,'#345b1712');light.addColorStop(.5,'#a8cf6110');light.addColorStop(1,'#1e401416');c.fillStyle=light;c.fillRect(0,0,w,h);
   }
   cylinder(x,z,player,time,glow=0,opacity=1,stage=0){
-    const c=this.ctx,p=this.project(x,z),r=this.unit*(player?.43:.42)*p.s,ry=r*.44,height=this.unit*.95*p.s,top=p.y-height,ivory=!player&&stage%2;
+    const c=this.ctx,p=this.project(x,z),r=this.unit*(player?.43:.42)*p.s,ry=r*.44,height=this.unit*.95*p.s,top=p.y-height,appearance=stageAppearance(stage);
     c.save();c.globalAlpha=opacity;
     const shadow=c.createRadialGradient(p.x-r*.65,p.y+r*.48,0,p.x-r*.65,p.y+r*.48,r*2.6);shadow.addColorStop(0,'#19351ba0');shadow.addColorStop(1,'#19351b00');
     c.fillStyle=shadow;c.beginPath();c.ellipse(p.x-r*.65,p.y+r*.48,r*2.5,r*.8,-.55,0,Math.PI*2);c.fill();
     if(player&&glow){const halo=c.createRadialGradient(p.x,p.y,r*.3,p.x,p.y,r*2.7);halo.addColorStop(0,'#deff8399');halo.addColorStop(1,'#deff8300');c.fillStyle=halo;c.beginPath();c.ellipse(p.x,p.y,r*2.7,r*1.6,0,0,Math.PI*2);c.fill();}
-    const body=c.createLinearGradient(p.x-r,0,p.x+r,0),colors=player?['#123ba5','#2573ef','#4094ff','#1848af']:ivory?['#a9ada0','#e6e7d6','#fffff0','#b7bcab']:['#9e2226','#e83b36','#ff6352','#a92328'];
+    const body=c.createLinearGradient(p.x-r,0,p.x+r,0),colors=player?['#123ba5','#2573ef','#4094ff','#1848af']:appearance.body;
     colors.forEach((color,i)=>body.addColorStop([0,.27,.58,1][i],color));
     c.fillStyle=body;c.beginPath();c.moveTo(p.x-r,top);c.lineTo(p.x-r,p.y);c.ellipse(p.x,p.y,r,ry,0,Math.PI,0,true);c.lineTo(p.x+r,top);c.closePath();c.fill();
-    const cap=c.createLinearGradient(p.x-r,top-ry,p.x+r,top+ry);cap.addColorStop(0,player?'#a8dcff':ivory?'#fffff4':'#ffb39b');cap.addColorStop(.45,player?'#72bfff':ivory?'#f5f6e6':'#ff8c74');cap.addColorStop(1,player?'#397eec':ivory?'#c8ceba':'#e65349');
+    const cap=c.createLinearGradient(p.x-r,top-ry,p.x+r,top+ry);cap.addColorStop(0,player?'#a8dcff':appearance.cap[0]);cap.addColorStop(.45,player?'#72bfff':appearance.cap[1]);cap.addColorStop(1,player?'#397eec':appearance.cap[2]);
     c.fillStyle=cap;c.beginPath();c.ellipse(p.x,top,r,ry,0,0,Math.PI*2);c.fill();c.strokeStyle='#fff5';c.lineWidth=.8;c.stroke();
     c.strokeStyle='#ffffff27';c.lineWidth=1.2;c.beginPath();c.moveTo(p.x-r*.43,top+ry*.8);c.lineTo(p.x-r*.43,p.y-ry*.4);c.stroke();
     if(glow){c.strokeStyle=`rgba(234,255,166,${glow})`;c.lineWidth=1.7;c.beginPath();c.ellipse(p.x,p.y+ry*.1,r*1.4,ry*1.6,0,0,Math.PI*2);c.stroke();}
@@ -60,7 +61,7 @@ export class Renderer{
   }
   warning(w,time,player){
     const c=this.ctx,e=w.enemy,p=this.project(e.x,e.z),target=this.project(player.x,player.z),x=clamp(p.x,14,this.w-14),y=clamp(p.y,24,this.h-24),s=5.5*(this.reduced?1:1+Math.sin(time*8+e.phase)*.1);
-    c.save();c.translate(x,y);c.fillStyle='#264e2a66';c.beginPath();c.arc(0,0,10,0,Math.PI*2);c.fill();c.rotate(Math.atan2(target.y-p.y,target.x-p.x));c.fillStyle=e.stage%2?'#fff3c7':'#ef4937';c.beginPath();c.moveTo(s,0);c.lineTo(-s,-s*.7);c.lineTo(-s,s*.7);c.closePath();c.fill();c.restore();
+    c.save();c.translate(x,y);c.fillStyle='#264e2a66';c.beginPath();c.arc(0,0,10,0,Math.PI*2);c.fill();c.rotate(Math.atan2(target.y-p.y,target.x-p.x));c.fillStyle=stageAppearance(e.stage).warning;c.beginPath();c.moveTo(s,0);c.lineTo(-s,-s*.7);c.lineTo(-s,s*.7);c.closePath();c.fill();c.restore();
   }
   burst(x,z,type='dodge'){this.effects.push({type,x,z,t:0});}
   clearEffects(){this.effects=[];}
@@ -85,7 +86,7 @@ export class Renderer{
   }
   draw(game,time,dt,{demo=false,alpha=1}={}){
     const t=clamp(alpha,0,1),interpolate=o=>({...o,x:(o.prevX??o.x)+(o.x-(o.prevX??o.x))*t,z:(o.prevZ??o.z)+(o.z-(o.prevZ??o.z))*t});
-    this.camera=interpolate(game.camera);this.field();const player=interpolate(game.player);
+    this.camera=interpolate(game.camera);this.startStage=game.startStage??0;this.field();const player=interpolate(game.player);
     for(const warning of game.warnings||[])this.warning(warning,time,player);
     const objects=game.enemies.map(e=>({...interpolate(e),player:false}));objects.push({...player,player:true});objects.sort((a,b)=>b.z-a.z);
     for(const o of objects){const p=this.project(o.x,o.z);if(p.x>-40&&p.x<this.w+40&&p.y>-40&&p.y<this.h+50)this.cylinder(o.x,o.z,o.player,time,o.player?game.player.glow:0,o.opacity??1,o.stage??0);}
