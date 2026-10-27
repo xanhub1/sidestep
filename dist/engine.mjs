@@ -1,9 +1,9 @@
 // World coordinates: +z runs upfield. Camera motion never changes actor physics.
-export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, unitsPerYard:2, playerRadius:.44, enemyRadius:.49, steerSpeed:11.5 });
+export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, unitsPerYard:2, playerRadius:.44, enemyRadius:.49, steerSpeed:12.4 });
 export const CHARACTER=Object.freeze({playerRadius:.525,enemyRadius:.515,height:1.16,ellipse:.44});
 export const PACE=.8;
 export const VIEW = Object.freeze({ width:16.5, verticalScale:.94, anchor:.46, perspective:.0035, startY:.90, startLineY:.985, topY:.075, bottomY:.94, leftX:.045, rightX:.955 });
-const MODES={easy:{forward:10.4,speed:6.2,pursuitRatio:.94,interval:2.1,groupSize:3,capacity:22,startStage:0,anticipation:.12,interceptChance:.45,turnResponse:.22},medium:{forward:12.8,speed:10.6,pursuitRatio:.99,interval:1.65,groupSize:5,capacity:36,startStage:1,anticipation:.24,interceptChance:.75,turnResponse:.15},hardcore:{forward:15.2,speed:13.5,pursuitRatio:1.035,interval:1.25,groupSize:7,capacity:50,startStage:2,anticipation:.38,interceptChance:.92,turnResponse:.105}};
+const MODES={easy:{forward:10.4,speed:6.2,pursuitRatio:.94,pursuitWindow:2,fallbackRatio:.70,interval:2.1,groupSize:3,capacity:22,startStage:0,anticipation:.12,interceptChance:.45,turnResponse:.22},medium:{forward:12.8,speed:10.6,pursuitRatio:.99,pursuitWindow:2.75,fallbackRatio:.74,interval:1.65,groupSize:5,capacity:36,startStage:1,anticipation:.24,interceptChance:.75,turnResponse:.15},hardcore:{forward:15.2,speed:13.5,pursuitRatio:1.035,pursuitWindow:3.25,fallbackRatio:.78,interval:1.25,groupSize:7,capacity:50,startStage:2,anticipation:.38,interceptChance:.92,turnResponse:.105}};
 const STAGES=[
   {name:'RED DEFENSE',turf:'#4c8b35',endZone:'#3c782d',body:['#9e2226','#e83b36','#ff6352','#a92328'],cap:['#ffb39b','#ff8c74','#e65349'],warning:'#ef4937'},
   {name:'WHITE DEFENSE',turf:'#a47849',endZone:'#8e633b',body:['#a9ada0','#e6e7d6','#fffff0','#b7bcab'],cap:['#fffff4','#f5f6e6','#c8ceba'],warning:'#fff3c7'},
@@ -39,7 +39,7 @@ export function sweptHit(ax,az,bx,bz,radius){
   return Math.hypot(ax+dx*t,az+dz*t)<=radius;
 }
 export function createDefender({id,x,z,speed=7.2,pursuitSpeed=speed,stage=0,pattern='intercept',anticipation=.22,turnResponse=.18,phase=0}){
-  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,pursuitSpeed,stage,pattern,anticipation,turnResponse,phase,age:0,closestDistance:Infinity,threatened:false,rewarded:false,retired:false,entered:false,hasAppeared:false,opacity:1};
+  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,pursuitSpeed,stage,pattern,anticipation,turnResponse,phase,age:0,pursuitAge:0,evaded:false,fatigue:0,mode:'approach',closestDistance:Infinity,threatened:false,rewarded:false,retired:false,entered:false,hasAppeared:false,opacity:1};
 }
 export class Game{
   constructor({random=Math.random,onEvent=()=>{}}={}){this.random=random;this.onEvent=onEvent;this.width=390;this.height=844;this.reset('medium');}
@@ -70,8 +70,8 @@ export class Game{
     const p=this.player,k=this.keyboard,forward=this.tune().forward,b=this.movementBounds();
     p.targetX=clamp(p.targetX,b.minX,b.maxX);
     p.targetZ=clamp(p.targetZ+forward*dt,b.minZ,b.maxZ);
-    const desired=k.x||k.z?limited(k.x*FIELD.steerSpeed,k.z*FIELD.steerSpeed,FIELD.steerSpeed):this.dragging?limited((p.targetX-p.x)*20,(p.targetZ-p.z-forward*dt)*20,FIELD.steerSpeed):{x:0,z:0};
-    const blend=damp(dt,this.dragging?.024:.038);
+    const desired=k.x||k.z?limited(k.x*FIELD.steerSpeed,k.z*FIELD.steerSpeed,FIELD.steerSpeed):this.dragging?limited((p.targetX-p.x)*22,(p.targetZ-p.z-forward*dt)*22,FIELD.steerSpeed):{x:0,z:0};
+    const blend=damp(dt,this.dragging?.022:.034);
     p.controlVX=mix(p.controlVX,desired.x,blend);p.controlVZ=mix(p.controlVZ,desired.z,blend);
     p.vx=p.controlVX;p.vz=forward+p.controlVZ;
     p.x+=p.vx*dt;p.z+=p.vz*dt;
@@ -125,13 +125,22 @@ export class Game{
     const p=this.player,dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz),lead=e.pattern==='intercept'?e.anticipation:.04;
     e.age+=dt;e.closestDistance=Math.min(e.closestDistance,distance);
     if(distance<2.15&&dz<.5)e.threatened=true;
-    // Passed defenders settle into a near-running-speed chase instead of rapidly losing effort.
-    const chase=clamp((dz-.25)/2,0,1),stamina=1-.04*clamp((dz-12)/20,0,1),rearEntry=e.edge==='south'&&!e.entered;
-    const speed=rearEntry?Math.max(e.pursuitSpeed,this.tune().forward*1.35):mix(e.speed,e.pursuitSpeed??e.speed,chase)*stamina;
+    const tune=this.tune(),rearEntry=e.edge==='south'&&!e.entered;
+    // Being beaten starts a persistent clock. Cuts and touchdowns cannot refresh that defender.
+    if(!e.evaded&&e.entered&&e.age>.35&&dz>.25)e.evaded=true;
+    if(e.evaded)e.pursuitAge+=dt;
+    const progress=clamp((e.pursuitAge-tune.pursuitWindow)/3,0,1);
+    e.fatigue=progress*progress*(3-2*progress);
+    e.mode=e.fatigue>=1?'falling-back':e.evaded?'pursuit':'approach';
+    const chase=clamp((dz-.25)/2,0,1),stamina=1-.04*clamp((dz-12)/20,0,1);
+    const effort=rearEntry?Math.max(e.pursuitSpeed,tune.forward*1.35):mix(e.speed,e.pursuitSpeed??e.speed,chase)*stamina;
+    const speed=mix(effort,Math.min(effort,tune.forward*tune.fallbackRatio),e.fatigue);
     const aimX=dx+p.vx*lead,aimZ=dz+p.vz*lead,length=Math.hypot(aimX,aimZ)||1;
     let avoidX=0,avoidZ=0;
     for(const other of this.enemies){if(other===e)continue;const dx=e.x-other.x,dz=e.z-other.z,d=Math.hypot(dx,dz);if(d>.01&&d<1.5){const weight=(1.5-d)/1.5;avoidX+=dx/d*weight;avoidZ+=dz/d*weight;}}
-    const desired=limited(aimX/length*speed+avoidX*3,aimZ/length*speed+avoidZ*3,speed),desiredX=desired.x,desiredZ=desired.z,blend=damp(dt,e.turnResponse??.18);
+    // Exhausted defenders jog straight upfield while the camera and runner pull away.
+    const headingX=aimX/length*(1-e.fatigue),headingZ=mix(aimZ/length,1,e.fatigue);
+    const desired=limited(headingX*speed+avoidX*3,headingZ*speed+avoidZ*3,speed),desiredX=desired.x,desiredZ=desired.z,blend=damp(dt,e.turnResponse??.18);
     const change=limited((desiredX-e.vx)*blend,(desiredZ-e.vz)*blend,38*dt);
     e.vx+=change.x;e.vz+=change.z;e.x+=e.vx*dt;e.z+=e.vz*dt;
     const bounds=characterBounds(e.x,e.z,this.camera,this.width,this.height),outside=outsideView(e.x,e.z,this.camera,this.width,this.height);
