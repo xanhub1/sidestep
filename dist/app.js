@@ -109,7 +109,7 @@ function frame(timestamp){
     if(game.time>6)$('#gesture-hint').style.opacity='0';
   }
   if(displayedScore!==game.score){scoreEl.textContent=format(game.score);displayedScore=game.score;}
-  renderer.draw(state==='menu'?demo(visualTime):game,visualTime,state==='paused'?0:dt,{demo:state==='menu'});
+  renderer.draw(state==='menu'?demo(visualTime):game,visualTime,state==='paused'?0:dt,{demo:state==='menu',alpha:state==='playing'?accumulator/(1/120):1});
   requestAnimationFrame(frame);
 }
 setDifficulty(difficulty);updateToggles();setState('menu');requestAnimationFrame(frame);

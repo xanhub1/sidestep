@@ -1,4 +1,4 @@
-import { VIEW, viewportBounds, clamp } from './engine.mjs';
+import { VIEW, viewportBounds, clamp, tuning } from './engine.mjs';
 
 export class Renderer{
   constructor(canvas){
@@ -53,15 +53,18 @@ export class Renderer{
   }
   burst(x,z,type='gap'){const p=this.project(x,z);this.effects.push({type,x:p.x/this.w,y:p.y/this.h,t:0});}
   clearEffects(){this.effects=[];this.trail=[];}
-  draw(game,time,dt,{demo=false}={}){
-    this.field(game.distance);const c=this.ctx;
+  draw(game,time,dt,{demo=false,alpha=1}={}){
+    this.field(game.distance);const c=this.ctx,t=clamp(alpha,0,1);
+    const interpolate=o=>({...o,x:(o.prevX??o.x)+(o.x-(o.prevX??o.x))*t,z:(o.prevZ??o.z)+(o.z-(o.prevZ??o.z))*t});
+    const player=demo?game.player:interpolate(game.player);
     if(!demo&&!this.reduced){
-      this.trail.push({x:game.player.x,z:game.player.z,t:0});if(this.trail.length>10)this.trail.shift();
-      for(const p of this.trail){p.t+=dt;p.z-=dt*8;}
+      this.trail.push({x:player.x,z:player.z,t:0});if(this.trail.length>10)this.trail.shift();
+      const scrollSpeed=tuning(game.score,game.difficulty).forward*.5;
+      for(const p of this.trail){p.t+=dt;p.z-=dt*scrollSpeed;}
       for(let i=0;i<this.trail.length;i+=3){const p=this.trail[i],v=this.project(p.x,p.z);c.fillStyle=`rgba(180,224,255,${Math.max(0,.12-p.t*.4)})`;c.beginPath();c.arc(v.x,v.y,2,0,Math.PI*2);c.fill();}
     }
-    for(const warning of game.warnings||[])this.warning(warning,time,game.player);
-    const objects=game.enemies.map(e=>({...e,player:false}));objects.push({...game.player,player:true});objects.sort((a,b)=>b.z-a.z);
+    for(const warning of game.warnings||[])this.warning(warning,time,player);
+    const objects=game.enemies.map(e=>({...interpolate(e),player:false}));objects.push({...player,player:true});objects.sort((a,b)=>b.z-a.z);
     for(const o of objects){const p=this.project(o.x,o.z);if(p.x>-30&&p.x<this.w+30&&p.y>-30&&p.y<this.h+40)this.cylinder(o.x,o.z,o.player,time,o.player?game.player.glow:0,o.opacity??1);}
     for(const fx of this.effects){
       fx.t+=dt;const t=fx.t,x=fx.x*this.w,y=fx.y*this.h;
