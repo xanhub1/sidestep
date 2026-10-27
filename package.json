@@ -1,9 +1,9 @@
 {
   "name": "sidestep-football",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "A mobile-first HTML5 football dodge game with momentum steering.",
+  "description": "An overhead HTML5 football dodge game with free two-dimensional movement and defenders from every direction.",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",

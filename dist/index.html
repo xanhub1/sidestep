@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101713">
-  <meta name="description" content="Find your opening. An endless football dodge game with smooth swipe steering, dynamic defenders, and satisfying gap bonuses.">
+  <meta name="theme-color" content="#488b35">
+  <meta name="description" content="An open-field football dodge game. Move in every direction, split the defense, and keep your run alive.">
   <title>Sidestep — Find your opening</title>
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="stylesheet" href="./style.css">
@@ -17,49 +17,39 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
     <symbol id="i-cup" viewBox="0 0 24 24"><path d="M7 3h10v7a5 5 0 0 1-10 0V3Zm0 2H3v3a4 4 0 0 0 4 4m10-7h4v3a4 4 0 0 1-4 4m-5 3v6m-4 0h8"/></symbol>
-    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 10-13h-8l1-7Z"/></symbol>
-    <symbol id="i-gap" viewBox="0 0 24 24"><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><path d="M12 21V3m-4 4 4-4 4 4"/></symbol>
   </defs></svg>
-
-  <header class="site-header">
-    <a class="wordmark" href="./" aria-label="Sidestep home"><span class="brand-mark"><i></i><i></i><i></i></span>SIDESTEP<span class="brand-dot">®</span></a>
-    <span class="header-caption">A LITTLE FOOTBALL. A LOT OF INSTINCT.</span>
-    <button class="help-button" id="help-button"><span>How to play</span><b>?</b></button>
-  </header>
-
   <main class="game-layout">
-    <section class="intro" aria-label="Choose your game">
-      <div class="eyebrow"><span class="live-dot"></span> THE FIELD IS YOURS</div>
-      <h1>FIND YOUR<br><em>OPENING.</em></h1>
-      <p class="intro-copy">Stay light. Read the defense.<br>Turn a little space into a big play.</p>
-
-      <div class="difficulty-heading"><span>CHOOSE YOUR PACE</span><span>01 — 03</span></div>
-      <div class="difficulty-options" role="group" aria-label="Difficulty">
-        <button class="difficulty" data-difficulty="easy" aria-pressed="false"><span class="level-icon"><i></i></span><span class="difficulty-label">Easy<small>Find your rhythm</small></span><span class="choice-indicator"></span></button>
-        <button class="difficulty selected" data-difficulty="medium" aria-pressed="true"><span class="level-icon"><i></i><i></i></span><span class="difficulty-label">Medium<small>A little pressure. A lot of possibility.</small></span><span class="choice-indicator"></span></button>
-        <button class="difficulty" data-difficulty="hardcore" aria-pressed="false"><span class="level-icon"><i></i><i></i><i></i></span><span class="difficulty-label">Hardcore<small>Trust your instincts</small></span><span class="choice-indicator"></span></button>
-      </div>
-      <button class="primary-button start-button" id="start-button"><span>LET’S PLAY</span><svg><use href="#i-arrow"/></svg></button>
-      <div class="start-note"><span class="tiny-ball"></span> ONE BALL. NO SECOND CHANCES.</div>
-    </section>
-
     <section class="arena-column" aria-label="Football game">
-      <div class="arena-topline"><span><i class="status-dot"></i> ENDLESS RUN</span><span id="mode-label">MEDIUM</span></div>
       <div class="arena" id="arena">
-        <canvas id="game-canvas" aria-label="Football field. Swipe or drag anywhere to steer the blue sphere. Avoid red defenders." tabindex="0"></canvas>
+        <canvas id="game-canvas" aria-label="Football pitch. Swipe or drag in any direction to move the blue sphere. Avoid red defenders approaching from all sides." tabindex="0"></canvas>
         <div class="field-vignette"></div>
+        <div class="wordmark" aria-label="Sidestep"><span>≋</span> SIDESTEP</div>
         <div class="game-hud">
-          <div class="score-block"><span class="hud-label">SCORE</span><strong id="score">0000</strong></div>
-          <div class="best-block"><span class="hud-label"><svg><use href="#i-cup"/></svg> BEST</span><strong id="best-score">0000</strong></div>
+          <div class="score-block"><span class="sr-only">Score</span><strong id="score">0</strong></div>
+          <div class="best-block"><svg aria-hidden="true"><use href="#i-cup"/></svg><span class="sr-only">Best score</span><strong id="best-score">0</strong></div>
         </div>
         <div class="pace-badge" id="pace-badge"><span></span> FIND YOUR RHYTHM</div>
-        <div class="demo-label" id="demo-label"><span class="label-line"></span> YOUR NEXT GREAT RUN <span class="label-line"></span></div>
-        <div class="gesture-hint" id="gesture-hint"><span>↔</span> SWIPE ANYWHERE TO STEER</div>
+
+        <section class="intro" aria-label="Choose your game">
+          <div class="eyebrow">OPEN FIELD. ALL INSTINCT.</div>
+          <h1>FIND YOUR<br><em>OPENING.</em></h1>
+          <p class="intro-copy">Move in any direction. Keep them guessing.</p>
+          <div class="difficulty-heading"><span>CHOOSE YOUR PACE</span><span id="mode-label">MEDIUM</span></div>
+          <div class="difficulty-options" role="group" aria-label="Difficulty">
+            <button class="difficulty" data-difficulty="easy" aria-pressed="false"><span class="level-icon"><i></i></span><span>Easy</span><span class="choice-indicator"></span></button>
+            <button class="difficulty selected" data-difficulty="medium" aria-pressed="true"><span class="level-icon"><i></i><i></i></span><span>Medium</span><span class="choice-indicator"></span></button>
+            <button class="difficulty" data-difficulty="hardcore" aria-pressed="false"><span class="level-icon"><i></i><i></i><i></i></span><span>Hardcore</span><span class="choice-indicator"></span></button>
+          </div>
+          <button class="primary-button start-button" id="start-button"><span>LET’S PLAY</span><svg><use href="#i-arrow"/></svg></button>
+        </section>
+
+        <div class="gesture-hint" id="gesture-hint"><span>✥</span> SWIPE ANY DIRECTION TO MOVE</div>
         <div class="arena-controls">
           <button class="icon-button sound-toggle" aria-label="Turn sound off" aria-pressed="true"><svg><use href="#i-sound"/></svg></button>
           <button class="icon-button haptic-toggle" aria-label="Turn haptics off" aria-pressed="true"><svg><use href="#i-haptic"/></svg></button>
           <span class="control-divider"></span>
           <button class="icon-button" id="pause-button" aria-label="Pause game" disabled><svg><use href="#i-pause"/></svg></button>
+          <button class="icon-button help-button" id="help-button" aria-label="How to play">?</button>
         </div>
         <div class="countdown" id="countdown" hidden aria-live="assertive"></div>
         <div class="game-overlay" id="pause-overlay" hidden>
@@ -69,20 +59,9 @@
           <div class="overlay-card result-card"><span class="eyebrow" id="result-eyebrow">GOOD RUN. GO AGAIN.</span><h2>THAT’S<br>THE PLAY.</h2><span class="result-score-label">FINAL SCORE</span><strong id="final-score">0</strong><div class="result-stats"><div><strong id="final-distance">0</strong><span>YARDS</span></div><div><strong id="final-gaps">0</strong><span>GAPS CLEARED</span></div></div><button class="primary-button" id="retry-button">RUN IT BACK <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="menu-button">Change difficulty</button></div>
         </div>
       </div>
-      <div class="arena-bottomline"><span class="blue-dot"></span> YOU <span class="red-dot"></span> THE DEFENSE <span class="bottomline-right">FIND THE SPACE.</span></div>
     </section>
-
-    <aside class="field-notes">
-      <div class="notes-heading">THE PLAYBOOK <span>↗</span></div>
-      <div class="play-note"><span class="note-number">01</span><div><div class="note-drawing steering-drawing">↔<span></span></div><h3>Move with feeling.</h3><p>Swipe or drag anywhere.<br>A little momentum goes a long way.</p></div></div>
-      <div class="play-note"><span class="note-number">02</span><div><div class="note-drawing gap-drawing"><i></i><b>↑</b><i></i></div><h3>Split the defense.</h3><p>Slip between two defenders.<br>Pocket an extra <b class="lime">+50.</b></p></div></div>
-      <div class="play-note"><span class="note-number">03</span><div><div class="note-drawing warning-drawing">▲ <span>▲</span> ▲</div><h3>Stay one play ahead.</h3><p>Red arrows mean company.<br>The longer you run, the hotter it gets.</p></div></div>
-      <div class="session-card"><span class="hud-label">YOUR PERSONAL BEST</span><div><svg><use href="#i-cup"/></svg><strong id="sidebar-best">0000</strong><span>PTS</span></div><small>Every run is a fresh start.</small></div>
-    </aside>
   </main>
-
-  <footer class="site-footer"><span>BUILT FOR THE FLOW.</span><span class="keyboard-note"><kbd>←</kbd><kbd>→</kbd> also work <span>·</span> <kbd>SPACE</kbd> to pause</span><span>NO TEAMS. JUST YOU.</span></footer>
-  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>READ. REACT.<br>REPEAT.</h2><p>Your blue sphere runs forward automatically. Swipe or drag <strong>anywhere</strong> to steer; movement follows your swipe with a little momentum. Arrow keys and A / D work too.</p><p>Avoid every red defender. Warning arrows show where they will arrive. Pass cleanly between two defenders for <strong class="lime">+50</strong>. Keep going to increase your score — and the pressure.</p><p>Choose Easy for more space, Medium for a balanced run, or Hardcore for fast interceptions. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>Swipe or drag anywhere in any direction.</strong> Move up, down, left, right, or diagonally. Your blue sphere follows the movement of your swipe with a little momentum. All four arrow keys and W / A / S / D work too.</p><p>The pitch advances automatically. Red defenders arrive from random edges: <strong>front, back, left, and right.</strong> Watch the warning arrows, change direction, and make them miss their tackle.</p><p>Pass cleanly between two defenders for <strong class="lime">+50</strong>. One collision ends the run. Pick Easy for more time and space, Medium for a balanced run, or Hardcore for faster pressure. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
   <div class="sr-only" id="announcer" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

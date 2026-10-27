@@ -1,4 +1,4 @@
-import { Game } from './engine.mjs';
+import { Game, VIEW } from './engine.mjs';
 import { Renderer } from './renderer.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -7,7 +7,7 @@ const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem('sidestep
 const save=(key,value)=>{try{localStorage.setItem('sidestep:'+key,JSON.stringify(value));}catch{/* Private browsing can disable storage. */}};
 let difficulty=read('difficulty','medium');if(!['easy','medium','hardcore'].includes(difficulty))difficulty='medium';
 let state='menu',best=read('bests',{}),sound=read('sound',true),haptics=read('haptics',true),audio=null;
-let pointer=null,lastPointerX=0,keys=new Set(),lastTime=0,accumulator=0,visualTime=0,countdownTime=0,runBest=0;
+let pointer=null,lastPointerX=0,lastPointerY=0,keys=new Set(),lastTime=0,accumulator=0,visualTime=0,countdownTime=0,runBest=0;
 let displayedScore=-1,helpPaused=false;
 
 function audioUnlock(){
@@ -21,22 +21,24 @@ function tone(type){
   notes.forEach((frequency,i)=>{const start=now+i*.045,osc=audio.createOscillator(),gain=audio.createGain();osc.type=type==='collision'?'sine':'triangle';osc.frequency.setValueAtTime(frequency,start);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.035,start+.006);gain.gain.exponentialRampToValueAtTime(.0001,start+.19);osc.connect(gain);gain.connect(audio.destination);osc.start(start);osc.stop(start+.2);osc.onended=()=>{osc.disconnect();gain.disconnect();};});
 }
 function vibrate(){if(haptics&&typeof navigator.vibrate==='function')try{navigator.vibrate(20);}catch{/* Unsupported on some browsers. */}}
-function format(n){return Math.floor(n).toString().padStart(4,'0');}
-function syncBest(){const value=Number(best[difficulty])||0;$('#best-score').textContent=format(value);$('#sidebar-best').textContent=format(value);}
+function format(n){return Math.floor(n).toString();}
+function syncBest(){const value=Number(best[difficulty])||0;$('#best-score').textContent=format(value);}
 function setState(next){state=next;document.body.dataset.state=next;$('#pause-overlay').hidden=next!=='paused';$('#over-overlay').hidden=next!=='over';$('#countdown').hidden=next!=='countdown';$('#pause-button').disabled=next!=='playing';$('#start-button').disabled=next==='playing'||next==='paused'||next==='countdown';$('#start-button span').textContent=next==='playing'||next==='paused'?'RUN IN PROGRESS':'LET’S PLAY';$$('.difficulty').forEach(b=>b.disabled=next!=='menu'&&next!=='over');}
 function setDifficulty(value){difficulty=value;save('difficulty',value);$$('.difficulty').forEach(b=>{const selected=b.dataset.difficulty===value;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',selected);});$('#mode-label').textContent=value.toUpperCase();syncBest();}
 function updateToggles(){
   $$('.sound-toggle').forEach(b=>{b.setAttribute('aria-pressed',String(sound));b.setAttribute('aria-label',`Turn sound ${sound?'off':'on'}`);b.querySelector('use').setAttribute('href',sound?'#i-sound':'#i-mute');});
   $$('.haptic-toggle').forEach(b=>{b.setAttribute('aria-pressed',String(haptics));b.setAttribute('aria-label',`Turn haptics ${haptics?'off':'on'}`);});
 }
-function clearInput(){pointer=null;keys.clear();game.keyboard=0;game.release();}
+function clearInput(){pointer=null;keys.clear();game.keyboard={x:0,z:0};game.release();}
 const game=new Game({onEvent:event=>{
   if(event.type==='gap'){
     renderer.burst(event.x,event.z);tone('gap');vibrate();scoreEl.classList.remove('score-pop');void scoreEl.offsetWidth;scoreEl.classList.add('score-pop');$('#announcer').textContent=`Gap cleared. Plus 50. ${game.gaps} gaps.`;
   }else if(event.type==='collision'){
-    renderer.burst(event.x,0,'collision');tone('collision');endRun();
+    renderer.burst(event.x,event.z,'collision');tone('collision');endRun();
   }
 }});
+renderer.onResize=(width,height)=>game.setViewport(width,height);
+game.setViewport(renderer.w,renderer.h);
 function startRun(){
   audioUnlock();game.reset(difficulty);renderer.clearEffects();clearInput();runBest=Number(best[difficulty])||0;displayedScore=-1;
   $('#gesture-hint').style.opacity='1';countdownTime=1.5;$('#countdown').textContent='READY';setState('countdown');
@@ -66,30 +68,33 @@ $('#help-dialog').addEventListener('close',()=>{if(helpPaused){helpPaused=false;
 // Only deltas affect the target: a touch never moves the player to the finger.
 window.addEventListener('pointerdown',e=>{
   if(state!=='playing'||pointer!==null||e.button>0||e.target.closest('button,a,dialog'))return;
-  pointer=e.pointerId;lastPointerX=e.clientX;game.player.target=game.player.x;game.dragging=true;
+  pointer=e.pointerId;lastPointerX=e.clientX;lastPointerY=e.clientY;game.player.targetX=game.player.x;game.player.targetZ=game.player.z;game.dragging=true;
   try{canvas.setPointerCapture(e.pointerId);}catch{/* Window listeners still provide dragging. */}
   $('#gesture-hint').style.opacity='0';audioUnlock();e.preventDefault();
 },{passive:false});
 window.addEventListener('pointermove',e=>{
   if(state!=='playing'||e.pointerId!==pointer)return;
   // Use the same relative sensitivity at every screen size.
-  const dx=e.clientX-lastPointerX;lastPointerX=e.clientX;game.steer(dx/renderer.w*11.7*.95);e.preventDefault();
+  const dx=e.clientX-lastPointerX,dy=e.clientY-lastPointerY;lastPointerX=e.clientX;lastPointerY=e.clientY;
+  game.steer(dx/renderer.unit*.95,-dy/(renderer.unit*VIEW.verticalScale)*.95);e.preventDefault();
 },{passive:false});
 function releasePointer(e){if(e.pointerId!==pointer)return;pointer=null;game.release();}
 window.addEventListener('pointerup',releasePointer);window.addEventListener('pointercancel',releasePointer);canvas.addEventListener('lostpointercapture',releasePointer);
+const movementKeys=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS'];
+function syncKeys(){game.keyboard={x:Number(keys.has('ArrowRight')||keys.has('KeyD'))-Number(keys.has('ArrowLeft')||keys.has('KeyA')),z:Number(keys.has('ArrowUp')||keys.has('KeyW'))-Number(keys.has('ArrowDown')||keys.has('KeyS'))};}
 window.addEventListener('keydown',e=>{
   if($('#help-dialog').open)return;
   if((e.code==='Space'||e.code==='Escape')&&!e.repeat&&(state==='playing'||state==='countdown'||state==='paused')){e.preventDefault();state==='paused'?resume():pause();return;}
-  if(['ArrowLeft','ArrowRight','KeyA','KeyD'].includes(e.code)&&state==='playing'){e.preventDefault();keys.add(e.code);game.keyboard=Number(keys.has('ArrowRight')||keys.has('KeyD'))-Number(keys.has('ArrowLeft')||keys.has('KeyA'));$('#gesture-hint').style.opacity='0';}
+  if(movementKeys.includes(e.code)&&state==='playing'){e.preventDefault();keys.add(e.code);syncKeys();$('#gesture-hint').style.opacity='0';}
 });
-window.addEventListener('keyup',e=>{keys.delete(e.code);game.keyboard=Number(keys.has('ArrowRight')||keys.has('KeyD'))-Number(keys.has('ArrowLeft')||keys.has('KeyA'));});
+window.addEventListener('keyup',e=>{keys.delete(e.code);syncKeys();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('blur',pause);
 
 function demo(time){
-  return {distance:time*2.5,player:{x:Math.sin(time*.45)*.65,glow:0},enemies:[
-    {x:-2.45+Math.sin(time*.3)*.2,z:18+Math.sin(time*.35)*3},
-    {x:2.1,z:11+Math.sin(time*.35+.7)*3},{x:.7,z:38+Math.sin(time*.35+1)*3},
-    {x:-2.9,z:45+Math.sin(time*.35+2)*3},{x:3.4,z:53+Math.sin(time*.35+3)*3}],warnings:[]};
+  return {distance:time*2.5,player:{x:-1.4+Math.sin(time*.5)*.4,z:.8+Math.cos(time*.4)*.3,glow:0},enemies:[
+    {x:5.5+Math.sin(time*.4)*.3,z:2.6},{x:3.4,z:-2.3+Math.sin(time*.5)*.5},
+    {x:4.7,z:-1.7+Math.sin(time*.5+.5)*.5},{x:5,z:-7+Math.sin(time*.5)*.4},
+    {x:1.3,z:-12+Math.sin(time*.5)*.3},{x:-.8,z:-13+Math.sin(time*.5+1)*.4}],warnings:[]};
 }
 function frame(timestamp){
   const dt=Math.min((timestamp-(lastTime||timestamp))/1000,.05);lastTime=timestamp;visualTime+=dt;
@@ -104,7 +109,7 @@ function frame(timestamp){
     if(game.time>6)$('#gesture-hint').style.opacity='0';
   }
   if(displayedScore!==game.score){scoreEl.textContent=format(game.score);displayedScore=game.score;}
-  renderer.draw(state==='menu'?demo(visualTime):game,visualTime,dt,{demo:state==='menu'});
+  renderer.draw(state==='menu'?demo(visualTime):game,visualTime,state==='paused'?0:dt,{demo:state==='menu'});
   requestAnimationFrame(frame);
 }
 setDifficulty(difficulty);updateToggles();setState('menu');requestAnimationFrame(frame);
