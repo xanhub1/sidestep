@@ -41,7 +41,7 @@ renderer.onResize=(width,height)=>game.setViewport(width,height);
 game.setViewport(renderer.w,renderer.h);
 function startRun(){
   audioUnlock();game.reset(difficulty);renderer.clearEffects();clearInput();runBest=Number(best[difficulty])||0;displayedScore=-1;
-  $('#gesture-hint').style.opacity='1';countdownTime=1.5;$('#countdown').textContent='READY';setState('countdown');
+  $('#gesture-hint').style.opacity='1';countdownTime=.75;$('#countdown').textContent='READY';setState('countdown');
   accumulator=0;canvas.focus({preventScroll:true});
 }
 function endRun(){
@@ -91,15 +91,15 @@ window.addEventListener('keyup',e=>{keys.delete(e.code);syncKeys();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('blur',pause);
 
 function demo(time){
-  return {distance:time*2.5,player:{x:-1.4+Math.sin(time*.5)*.4,z:.8+Math.cos(time*.4)*.3,glow:0},enemies:[
-    {x:5.5+Math.sin(time*.4)*.3,z:2.6},{x:3.4,z:-2.3+Math.sin(time*.5)*.5},
-    {x:4.7,z:-1.7+Math.sin(time*.5+.5)*.5},{x:5,z:-7+Math.sin(time*.5)*.4},
-    {x:1.3,z:-12+Math.sin(time*.5)*.3},{x:-.8,z:-13+Math.sin(time*.5+1)*.4}],warnings:[]};
+  return {distance:time*8,player:{x:-1.4+Math.sin(time*1.2)*.6,z:.8+Math.cos(time)*.4,glow:0},enemies:[
+    {x:5+Math.sin(time*1.2)*.5,z:3.1},{x:3.2,z:-2.6+Math.sin(time*1.4)*.8},
+    {x:-4.8,z:4.8+Math.sin(time*1.1+.5)*.7},{x:4.2,z:-6+Math.sin(time*1.3)*.8},
+    {x:1.3,z:-11+Math.sin(time*1.1)*.8},{x:-4,z:-8+Math.sin(time*1.2+1)*.7}],warnings:[]};
 }
 function frame(timestamp){
   const dt=Math.min((timestamp-(lastTime||timestamp))/1000,.05);lastTime=timestamp;visualTime+=dt;
   if(state==='countdown'){
-    countdownTime-=dt;$('#countdown').textContent=countdownTime>1?'READY':countdownTime>.5?'SET':'GO';
+    countdownTime-=dt;$('#countdown').textContent=countdownTime>.35?'READY':'GO';
     if(countdownTime<=0){setState('playing');tone('start');}
   }
   if(state==='playing'){

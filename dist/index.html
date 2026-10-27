@@ -21,7 +21,7 @@
   <main class="game-layout">
     <section class="arena-column" aria-label="Football game">
       <div class="arena" id="arena">
-        <canvas id="game-canvas" aria-label="Football pitch. Swipe or drag in any direction to move the blue sphere. Avoid red defenders approaching from all sides." tabindex="0"></canvas>
+        <canvas id="game-canvas" aria-label="Football pitch. Swipe or drag in any direction to move the blue cylinder. Avoid red cylinders rushing from random directions." tabindex="0"></canvas>
         <div class="field-vignette"></div>
         <div class="wordmark" aria-label="Sidestep"><span>≋</span> SIDESTEP</div>
         <div class="game-hud">
@@ -33,7 +33,7 @@
         <section class="intro" aria-label="Choose your game">
           <div class="eyebrow">OPEN FIELD. ALL INSTINCT.</div>
           <h1>FIND YOUR<br><em>OPENING.</em></h1>
-          <p class="intro-copy">Move in any direction. Keep them guessing.</p>
+          <p class="intro-copy">Move fast. Cut hard. Keep them guessing.</p>
           <div class="difficulty-heading"><span>CHOOSE YOUR PACE</span><span id="mode-label">MEDIUM</span></div>
           <div class="difficulty-options" role="group" aria-label="Difficulty">
             <button class="difficulty" data-difficulty="easy" aria-pressed="false"><span class="level-icon"><i></i></span><span>Easy</span><span class="choice-indicator"></span></button>
@@ -61,7 +61,7 @@
       </div>
     </section>
   </main>
-  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>Swipe or drag anywhere in any direction.</strong> Move up, down, left, right, or diagonally. Your blue sphere follows the movement of your swipe with a little momentum. All four arrow keys and W / A / S / D work too.</p><p>The pitch advances automatically. Red defenders arrive from random edges: <strong>front, back, left, and right.</strong> Watch the warning arrows, change direction, and make them miss their tackle.</p><p>Pass cleanly between two defenders for <strong class="lime">+50</strong>. One collision ends the run. Pick Easy for more time and space, Medium for a balanced run, or Hardcore for faster pressure. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>Swipe or drag anywhere in any direction.</strong> Your blue cylinder responds quickly to each swipe. Move up, down, left, right, or diagonally. All four arrow keys and W / A / S / D work too.</p><p>The pitch advances automatically. Red cylinders <strong>rush straight at you from mixed, random directions.</strong> Read the arrows, make a quick cut, and let their tackle carry them past you.</p><p>Pass cleanly between two defenders for <strong class="lime">+50</strong>. One collision ends the run. Every mode plays fast: Easy gives you fewer attackers, Medium adds pressure, and Hardcore brings the biggest rush. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
   <div class="sr-only" id="announcer" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

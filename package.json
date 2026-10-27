@@ -1,6 +1,6 @@
 {
   "name": "sidestep-football",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "An overhead HTML5 football dodge game with free two-dimensional movement and defenders from every direction.",

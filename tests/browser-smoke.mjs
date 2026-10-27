@@ -43,14 +43,14 @@ try {
   await evaluate(`import('./engine.mjs').then(({Game})=>{const original=Game.prototype.update;Game.prototype.update=function(dt){const result=original.call(this,dt);window.__game=this;window.__run={x:this.player.x,z:this.player.z,vx:this.player.vx,vz:this.player.vz,targetX:this.player.targetX,targetZ:this.player.targetZ,score:this.score,gaps:this.gaps,enemies:this.enemies.length};return result;};})`);
   await click('#start-button');await waitFor(`document.body.dataset.state === 'playing'`);await sleep(200);
   assert(await evaluate(`Number(document.querySelector('#score').textContent)>0`));
-  await evaluate(`window.__game.nextWave=999`);
+  await evaluate(`window.__game.nextRush=999;window.__game.enemies=[];window.__game.warnings=[];window.__game.gapPairs.clear()`);
   const before=await evaluate('window.__run');
   const touch=(type,x,y=240)=>cdp('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y,id:1,radiusX:3,radiusY:3,force:1}]});
-  await touch('touchStart',60);await sleep(70);assert(Math.hypot(await evaluate('window.__run.x')-before.x,await evaluate('window.__run.z')-before.z)<.02,'touch-down teleported the sphere');
-  await touch('touchMove',145);await sleep(180);const moved=await evaluate('window.__run');assert(moved.x>before.x+.1,'relative swipe did not steer');assert(moved.x<moved.targetX,'momentum smoothing should lag target');
+  await touch('touchStart',60);await sleep(70);assert(Math.hypot(await evaluate('window.__run.x')-before.x,await evaluate('window.__run.z')-before.z)<.02,'touch-down teleported the cylinder');
+  await touch('touchMove',145);await sleep(50);const moved=await evaluate('window.__run');assert(moved.x>before.x+.35,'relative swipes must respond promptly');await sleep(200);assert(await evaluate('Math.abs(window.__run.x-window.__run.targetX)')<.02,'the player must settle without a long follow-through');
   const zBefore=await evaluate('window.__run.z');await touch('touchMove',145,130);await sleep(220);assert(await evaluate('window.__run.z')>zBefore+.1,'upward swipes must move up the pitch');
   await touch('touchMove',100,340);await sleep(300);assert(await evaluate('window.__run.vz')<0,'downward swipes must reverse vertical movement');
-  const speedBefore=await evaluate('Math.hypot(window.__run.vx,window.__run.vz)');await touch('touchEnd');await sleep(350);assert(await evaluate('Math.hypot(window.__run.vx,window.__run.vz)')<speedBefore*.12,'release must damp both axes');
+  const speedBefore=await evaluate('Math.hypot(window.__run.vx,window.__run.vz)');await touch('touchEnd');await sleep(60);assert(await evaluate('Math.hypot(window.__run.vx,window.__run.vz)')<Math.max(.01,speedBefore*.01),'release must stop promptly on both axes');
   const key=async(type,code)=>cdp('Input.dispatchKeyEvent',{type,code,key:code,windowsVirtualKeyCode:code==='ArrowUp'?38:code==='ArrowDown'?40:0});
   const keyboardZ=await evaluate('window.__run.z');await key('keyDown','ArrowUp');await sleep(250);await key('keyUp','ArrowUp');assert(await evaluate('window.__run.z')>keyboardZ+.3,'ArrowUp must move vertically');
   await key('keyDown','ArrowDown');await sleep(350);await key('keyUp','ArrowDown');assert(await evaluate('window.__run.vz')<0,'ArrowDown must reverse vertically');await sleep(400);
@@ -58,7 +58,7 @@ try {
   await click('#pause-button');assert.equal(await evaluate('document.body.dataset.state'),'paused');const pausedScore=await evaluate(`document.querySelector('#score').textContent`);await sleep(350);assert.equal(await evaluate(`document.querySelector('#score').textContent`),pausedScore);
   await screenshot('mobile-paused');await click('#resume-button');assert.equal(await evaluate('document.body.dataset.state'),'playing');
   await click('#help-button');assert(await evaluate(`document.querySelector('#help-dialog').open`));assert.equal(await evaluate('document.body.dataset.state'),'paused');await click('#got-it');await waitFor(`document.body.dataset.state === 'playing'`);
-  await evaluate(`window.__defender=(x,z,vx,vz,id)=>({id,wave:999,x,z,vx,vz,speed:Math.hypot(vx,vz),tangent:{x:1,z:0},attackOffset:0,anticipation:0,pattern:'pursuit',mode:'charge',chargeVX:vx,chargeVZ:vz,age:0,chargeAge:0,active:true,retired:false});const g=window.__game;g.player.vx=g.player.vz=0;g.release();const enemies=[-1.5,1.5].map((offset,i)=>window.__defender(g.player.x+offset,g.player.z+1.7,0,-4,'gap-'+i));g.enemies=enemies;g.waves=[{id:999,enemies,pairs:[{left:enemies[0],right:enemies[1],previous:null,candidate:null,done:false}]}];`);
+  await evaluate(`window.__defender=(x,z,vx,vz,id)=>({id,x,z,vx,vz,speed:Math.hypot(vx,vz),tangent:{x:1,z:0},attackOffset:0,anticipation:0,pattern:'pursuit',mode:'charge',chargeVX:vx,chargeVZ:vz,age:0,chargeAge:0,active:true,retired:false});const g=window.__game;g.player.vx=g.player.vz=0;g.release();g.enemies=[-1.5,1.5].map((offset,i)=>window.__defender(g.player.x+offset,g.player.z+1.7,0,-4,'gap-'+i));g.gapPairs.clear();`);
   await waitFor(`window.__run.gaps === 1`);await screenshot('mobile-gap-bonus');assert(await evaluate(`document.querySelector('#score').classList.contains('score-pop')`));
   await click('.sound-toggle');assert.equal(await evaluate(`document.querySelector('.sound-toggle').getAttribute('aria-pressed')`),'false');
   await click('.haptic-toggle');assert.equal(await evaluate(`document.querySelector('.haptic-toggle').getAttribute('aria-pressed')`),'false');
@@ -74,12 +74,17 @@ try {
   assert(await evaluate(`document.querySelector('#start-button').getBoundingClientRect().top > 0`));await screenshot('small-mobile-menu');
   assert.equal(await evaluate('innerWidth'),360,'small mobile layout must not widen the viewport');
   await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await cdp('Emulation.setTouchEmulationEnabled',{enabled:false});await sleep(150);
-  await click('#start-button');await waitFor(`document.body.dataset.state === 'playing'`);await sleep(50);await evaluate(`window.__game.nextWave=999`);
+  await click('#start-button');await waitFor(`document.body.dataset.state === 'playing'`);await sleep(50);await evaluate(`window.__game.nextRush=999;window.__game.enemies=[];window.__game.warnings=[];window.__game.gapPairs.clear()`);
   const mouseBefore=await evaluate('window.__run');await cdp('Input.dispatchMouseEvent',{type:'mousePressed',x:100,y:300,button:'left',clickCount:1});await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:190,y:400,button:'left',buttons:1});await sleep(250);await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',x:190,y:400,button:'left',clickCount:1});
   assert(await evaluate('window.__run.x')>mouseBefore.x+.2,'mouse dragging must move horizontally');assert(await evaluate('window.__run.z')<mouseBefore.z-.2,'mouse dragging must move vertically');
   await evaluate(`{const g=window.__game;g.enemies=[window.__defender(-3,1,1,-1,'visual-1'),window.__defender(4,-3,-1,1,'visual-2'),window.__defender(2,-10,0,2,'visual-3')];}`);await sleep(100);await screenshot('desktop-playing');
+  assert(await evaluate(`import('./renderer.js').then(({Renderer})=>typeof Renderer.prototype.cylinder==='function'&&typeof Renderer.prototype.sphere==='undefined')`),'characters must use the cylinder renderer');
+  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});await sleep(100);
+  await evaluate(`window.__game.reset('medium')`);await sleep(1200);
+  assert(await evaluate(`new Set([...window.__game.enemies,...window.__game.warnings.map(w=>w.enemy)].map(e=>e.edge)).size>=2`),'natural gameplay must rush from mixed directions');
+  assert(await evaluate(`window.__game.enemies.some(e=>Math.hypot(e.vx,e.vz)>6)`),'natural gameplay must be fast immediately');await screenshot('mobile-natural-rush');
   assert.deepEqual(errors,[],'Browser runtime errors');
-  const result={passed:true,checks:['overhead desktop and mobile rendering','390×844 and 360×640 layouts','difficulty selection','distance scoring','relative 2D touch steering','up/down swipes and reversal','normalized momentum and release friction','vertical arrow keys','2D desktop mouse dragging anywhere','pause freezes score','help pauses and resumes','gap bonus and synchronized score animation','sound and haptic toggles','side-on collision game over','retry'],runtimeErrors:errors};
+  const result={passed:true,checks:['upright cylinder rendering on desktop and mobile','390×844 and 360×640 layouts','difficulty selection','distance scoring','prompt relative 2D touch response','up/down swipes and quick reversal','quick release without rubber-band lag','vertical arrow keys','2D desktop mouse dragging anywhere','pause freezes score','help pauses and resumes','independent-defender gap bonus and animation','sound and haptic toggles','side-on collision game over','retry','fast natural rush from mixed directions'],runtimeErrors:errors};
   await writeFile(path.join(artifacts,'browser-results.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
   await cdp('Browser.close').catch(()=>{});
 } finally {ws?.close();browser.kill();}
