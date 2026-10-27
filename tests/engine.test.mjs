@@ -86,3 +86,11 @@ test('enemy AI preserves the planned corridor while intercepting',()=>{
     assert(g.gaps>=1);
   }
 });
+test('sideline defenders enter smoothly without snapping to their lane',()=>{
+  for(const side of [-1,1]){
+    const g=quiet(),home=side*3.4,e={id:'side',wave:0,x:side*5.5,originX:side*5.5,z:44,vx:0,speed:10,minX:home-.22,maxX:home+.22,home,phase:0,aggression:.5,side:true,age:0};
+    g.enemies=[e];let previous=e.x;
+    for(let i=0;i<300;i++){g.update(1/120);assert(Math.abs(e.x-previous)<=2.8/120+.0001,'entry must respect maximum lateral speed');previous=e.x;}
+    assert(e.x>=e.minX&&e.x<=e.maxX);assert.equal(e.side,false);
+  }
+});

@@ -105,7 +105,12 @@ export class Game {
       if(e.side&&e.age<1.1)target=e.home;
       const desiredVX=clamp((target-e.x)*3,-2.8,2.8);
       e.vx+=(desiredVX-e.vx)*(1-Math.exp(-dt/.2));e.x+=e.vx*dt;
-      if(!e.side||e.age>1.1)e.x=clamp(e.x,e.minX,e.maxX);
+      if(!e.side)e.x=clamp(e.x,e.minX,e.maxX);
+      else {
+        // Keep the entry continuous until the defender naturally reaches its lane.
+        e.x=clamp(e.x,Math.min(e.originX,e.minX),Math.max(e.originX,e.maxX));
+        if(e.x>=e.minX&&e.x<=e.maxX)e.side=false;
+      }
       e.z-=e.speed*dt;
       if(sweptHit(oldEX-oldX,oldZ,e.x-p.x,e.z,FIELD.playerRadius+FIELD.enemyRadius)) {
         this.alive=false;this.emit('collision',{x:p.x,z:0});return;
