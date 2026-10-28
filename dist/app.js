@@ -1,4 +1,4 @@
-import { Game, FIELD, tuning } from './engine.mjs';
+import { Game, FIELD, tuning, STEERING_DEFAULTS, normalizeSteering } from './engine.mjs';
 import { Renderer } from './renderer.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -8,7 +8,8 @@ const save=(key,value)=>{try{localStorage.setItem('sidestep:'+key,JSON.stringify
 let difficulty=read('difficulty','medium');if(!['easy','medium','hardcore'].includes(difficulty))difficulty='medium';
 let state='menu',best=read('bests-v2',{}),sound=read('sound',true),haptics=read('haptics',true),audio=null;
 let pointer=null,lastPointerX=0,lastPointerY=0,keys=new Set(),lastTime=0,accumulator=0,visualTime=0,countdownTime=0,runBest=0;
-let visualScore=0,helpPaused=false,tackleTime=0;
+let visualScore=0,helpPaused=false,tackleTime=0,settingsPrevious=null;
+let controlSettings=normalizeSteering(read('steering',STEERING_DEFAULTS));
 
 function audioUnlock(){
   if(!sound)return;
@@ -35,7 +36,7 @@ function updateToggles(){
   $$('.haptic-toggle').forEach(b=>{b.setAttribute('aria-pressed',String(haptics));b.setAttribute('aria-label',`Turn haptics ${haptics?'off':'on'}`);});
 }
 function clearInput(){pointer=null;keys.clear();game.keyboard={x:0,z:0};game.release();}
-const game=new Game({onEvent:event=>{
+const game=new Game({steering:controlSettings,onEvent:event=>{
   if(event.type==='dodge'||event.type==='touchdown'){
     renderer.burst(event.x,event.z,event.type);tone(event.type);vibrate();scoreEl.classList.remove('score-pop');void scoreEl.offsetWidth;scoreEl.classList.add('score-pop');
     $('#announcer').textContent=event.type==='dodge'?`Dodge. Plus 50. ${game.dodges} dodges.`:`Touchdown. Plus 500. Field ${game.touchdowns+1}.`;
@@ -72,6 +73,27 @@ $('#help-button').addEventListener('click',()=>{helpPaused=state==='playing'||st
 const closeHelp=()=>$('#help-dialog').close();$('#close-help').addEventListener('click',closeHelp);$('#got-it').addEventListener('click',closeHelp);
 $('#help-dialog').addEventListener('close',()=>{if(helpPaused){helpPaused=false;resume();}});
 
+function syncControlSettings(){
+  $('#steering-speed').value=controlSettings.speedPercent;$('#steering-speed-value').textContent=controlSettings.speedPercent+'%';
+  $('#steering-speed').setAttribute('aria-valuetext',controlSettings.speedPercent+' percent');
+  $('#steering-smoothing-enabled').checked=controlSettings.smoothingEnabled;
+  $('#steering-smoothing').value=controlSettings.smoothingPercent;$('#steering-smoothing').disabled=!controlSettings.smoothingEnabled;
+  $('#steering-smoothing-value').textContent=controlSettings.smoothingEnabled&&controlSettings.smoothingPercent>0?controlSettings.smoothingPercent+'%':'Off';
+  $('#steering-smoothing').setAttribute('aria-valuetext',controlSettings.smoothingEnabled?controlSettings.smoothingPercent+' percent':'Off');
+}
+function applyControlSettings(value){controlSettings=game.setSteering(value);save('steering',controlSettings);syncControlSettings();}
+function openSettings(){settingsPrevious=state;if(state==='playing'||state==='countdown')pause();syncControlSettings();$('#settings-dialog').showModal();}
+$('#settings-button').addEventListener('click',openSettings);$('#pause-settings').addEventListener('click',openSettings);
+$('#steering-speed').addEventListener('input',e=>applyControlSettings({speedPercent:Number(e.target.value)}));
+$('#steering-smoothing').addEventListener('input',e=>applyControlSettings({smoothingPercent:Number(e.target.value)}));
+$('#steering-smoothing-enabled').addEventListener('change',e=>applyControlSettings({smoothingEnabled:e.target.checked}));
+$('#reset-settings').addEventListener('click',()=>applyControlSettings(STEERING_DEFAULTS));
+$('#close-settings').addEventListener('click',()=>$('#settings-dialog').close());$('#done-settings').addEventListener('click',()=>$('#settings-dialog').close());
+$('#settings-dialog').addEventListener('close',()=>{
+  const previous=settingsPrevious;settingsPrevious=null;
+  if(previous==='playing')resume();else if(previous==='countdown'){clearInput();accumulator=0;setState('countdown');canvas.focus({preventScroll:true});}else if(previous==='paused')$('#resume-button').focus({preventScroll:true});
+});
+
 // Only deltas affect the target: a touch never moves the player to the finger.
 window.addEventListener('pointerdown',e=>{
   if(state!=='playing'||pointer!==null||e.button>0||e.target.closest('button,a,dialog'))return;
@@ -90,7 +112,7 @@ window.addEventListener('pointerup',releasePointer);window.addEventListener('poi
 const movementKeys=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS'];
 function syncKeys(){game.keyboard={x:Number(keys.has('ArrowRight')||keys.has('KeyD'))-Number(keys.has('ArrowLeft')||keys.has('KeyA')),z:Number(keys.has('ArrowUp')||keys.has('KeyW'))-Number(keys.has('ArrowDown')||keys.has('KeyS'))};}
 window.addEventListener('keydown',e=>{
-  if($('#help-dialog').open)return;
+  if($('#help-dialog').open||$('#settings-dialog').open)return;
   if((e.code==='Space'||e.code==='Escape')&&!e.repeat&&(state==='playing'||state==='countdown'||state==='paused')){e.preventDefault();state==='paused'?resume():pause();return;}
   if(movementKeys.includes(e.code)&&state==='playing'){e.preventDefault();keys.add(e.code);syncKeys();$('#gesture-hint').style.opacity='0';}
 });
@@ -117,10 +139,12 @@ function frame(timestamp){
     if(game.time>6)$('#gesture-hint').style.opacity='0';
   }
   if(state==='tackled'){tackleTime-=dt;if(tackleTime<=0)endRun();}
-  if(state!=='paused')visualScore+=(game.score-visualScore)*(1-Math.exp(-dt/.16));
-  if(game.score-visualScore<.5)visualScore=game.score;
+  if(state!=='paused'){
+    visualScore+=(game.score-visualScore)*(1-Math.exp(-dt/.16));
+    if(game.score-visualScore<.5)visualScore=game.score;
+  }
   scoreEl.textContent=format(visualScore);
   renderer.draw(state==='menu'?demo(visualTime):game,visualTime,state==='paused'?0:dt,{demo:state==='menu',alpha:state==='playing'?accumulator/(1/120):1});
   requestAnimationFrame(frame);
 }
-setDifficulty(difficulty);updateToggles();setState('menu');requestAnimationFrame(frame);
+setDifficulty(difficulty);updateToggles();syncControlSettings();setState('menu');requestAnimationFrame(frame);

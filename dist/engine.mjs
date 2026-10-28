@@ -1,9 +1,14 @@
 // World coordinates: +z runs upfield. Camera motion never changes actor physics.
-export const FIELD = Object.freeze({ halfWidth:12, length:200, endZone:14, stride:214, unitsPerYard:2, playerRadius:.44, enemyRadius:.49, steerSpeed:12.4 });
+export const FIELD = Object.freeze({ halfWidth:16, length:200, endZone:14, stride:214, unitsPerYard:2, playerRadius:.44, enemyRadius:.49, steerSpeed:12.4 });
 export const CHARACTER=Object.freeze({playerRadius:.525,enemyRadius:.515,height:1.16,ellipse:.44});
 export const PACE=.8;
-export const VIEW = Object.freeze({ width:16.5, verticalScale:.94, anchor:.46, perspective:.0035, startY:.90, startLineY:.985, topY:.075, bottomY:.94, leftX:.045, rightX:.955 });
-const MODES={easy:{forward:10.4,speed:6.2,pursuitRatio:.94,pursuitWindow:2,fallbackRatio:.70,interval:2.1,groupSize:3,capacity:22,startStage:0,anticipation:.12,interceptChance:.45,turnResponse:.22},medium:{forward:12.8,speed:10.6,pursuitRatio:.99,pursuitWindow:2.75,fallbackRatio:.74,interval:1.65,groupSize:5,capacity:36,startStage:1,anticipation:.24,interceptChance:.75,turnResponse:.15},hardcore:{forward:15.2,speed:13.5,pursuitRatio:1.035,pursuitWindow:3.25,fallbackRatio:.78,interval:1.25,groupSize:7,capacity:50,startStage:2,anticipation:.38,interceptChance:.92,turnResponse:.105}};
+export const STEERING_DEFAULTS=Object.freeze({speedPercent:120,smoothingPercent:50,smoothingEnabled:true});
+export function normalizeSteering(value={}){
+  const number=(n,fallback,min,max)=>Number.isFinite(Number(n))?Math.max(min,Math.min(max,Number(n))):fallback;
+  return {speedPercent:number(value?.speedPercent,120,60,200),smoothingPercent:number(value?.smoothingPercent,50,0,100),smoothingEnabled:typeof value?.smoothingEnabled==='boolean'?value.smoothingEnabled:true};
+}
+export const VIEW = Object.freeze({ width:16.5, verticalScale:.94, anchor:.46, perspective:.0035, startY:.90, startLineY:.985, topY:.075, bottomY:.94, followStart:.16, followEnd:.28, sidelineMargin:1 });
+const MODES={easy:{forward:10.4,speed:6.2,pursuitRatio:.94,pursuitWindow:.25,fatigueDuration:.85,fallbackRatio:.22,tailLimit:1,interval:2.1,groupSize:3,capacity:22,startStage:0,anticipation:.12,interceptChance:.45,turnResponse:.22},medium:{forward:12.8,speed:10.6,pursuitRatio:.99,pursuitWindow:.4,fatigueDuration:1,fallbackRatio:.28,tailLimit:2,interval:1.65,groupSize:5,capacity:36,startStage:1,anticipation:.24,interceptChance:.75,turnResponse:.15},hardcore:{forward:15.2,speed:13.5,pursuitRatio:1.035,pursuitWindow:.55,fatigueDuration:1.15,fallbackRatio:.34,tailLimit:3,interval:1.25,groupSize:7,capacity:50,startStage:2,anticipation:.38,interceptChance:.92,turnResponse:.105}};
 const STAGES=[
   {name:'RED DEFENSE',turf:'#4c8b35',endZone:'#3c782d',body:['#9e2226','#e83b36','#ff6352','#a92328'],cap:['#ffb39b','#ff8c74','#e65349'],warning:'#ef4937'},
   {name:'WHITE DEFENSE',turf:'#a47849',endZone:'#8e633b',body:['#a9ada0','#e6e7d6','#fffff0','#b7bcab'],cap:['#fffff4','#f5f6e6','#c8ceba'],warning:'#fff3c7'},
@@ -39,11 +44,12 @@ export function sweptHit(ax,az,bx,bz,radius){
   return Math.hypot(ax+dx*t,az+dz*t)<=radius;
 }
 export function createDefender({id,x,z,speed=7.2,pursuitSpeed=speed,stage=0,pattern='intercept',anticipation=.22,turnResponse=.18,phase=0}){
-  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,pursuitSpeed,stage,pattern,anticipation,turnResponse,phase,age:0,pursuitAge:0,evaded:false,fatigue:0,mode:'approach',closestDistance:Infinity,threatened:false,rewarded:false,retired:false,entered:false,hasAppeared:false,opacity:1};
+  return {id,x,z,prevX:x,prevZ:z,vx:0,vz:0,speed,pursuitSpeed,stage,pattern,anticipation,turnResponse,phase,age:0,pursuitAge:0,evaded:false,disengaged:false,exitSide:0,fatigue:0,mode:'approach',closestDistance:Infinity,threatened:false,rewarded:false,retired:false,entered:false,hasAppeared:false,opacity:1};
 }
 export class Game{
-  constructor({random=Math.random,onEvent=()=>{}}={}){this.random=random;this.onEvent=onEvent;this.width=390;this.height=844;this.reset('medium');}
+  constructor({random=Math.random,onEvent=()=>{},steering=STEERING_DEFAULTS}={}){this.random=random;this.onEvent=onEvent;this.steering=normalizeSteering(steering);this.width=390;this.height=844;this.reset('medium');}
   tune(){return tuning(this.score,this.difficulty,this.touchdowns);}
+  setSteering(value){this.steering=normalizeSteering({...this.steering,...value});return this.steering;}
   reset(difficulty=this.difficulty??'medium'){
     this.difficulty=difficulty;this.alive=true;this.time=0;this.distance=0;this.score=0;this.runScore=0;this.dodgeScore=0;this.touchdownScore=0;this.dodges=0;this.touchdowns=0;
     const mode=tuning(0,difficulty);this.startStage=mode.startStage;
@@ -59,9 +65,10 @@ export class Game{
     else{const shift=this.player.z-depthAtScreenY(height*ratio,width,height)-this.camera.z;this.camera.z+=shift;const offset=unprojectPoint(width*ratioX,height*ratio,{x:0,z:this.camera.z},width,height).x;this.camera.x=this.player.x-offset;}
     this.camera.prevX=this.camera.x;this.camera.prevZ=this.camera.z;this.player.prevX=this.player.x;this.player.prevZ=this.player.z;
   }
-  movementBounds(z=this.player.z){
-    const scale=projectPoint(0,z,this.camera,this.width,this.height).s,margin=FIELD.halfWidth-FIELD.playerRadius;
-    return {minX:Math.max(-margin,this.camera.x+(VIEW.leftX-.5)*VIEW.width/scale),maxX:Math.min(margin,this.camera.x+(VIEW.rightX-.5)*VIEW.width/scale),minZ:this.camera.z+depthAtScreenY(this.height*VIEW.bottomY,this.width,this.height),maxZ:this.camera.z+depthAtScreenY(this.height*VIEW.topY,this.width,this.height)};
+  movementBounds(){
+    // Sideways room is the whole pitch, with the drawn body inside the sideline; followSideways keeps the runner on screen.
+    const margin=FIELD.halfWidth-CHARACTER.playerRadius-.2;
+    return {minX:-margin,maxX:margin,minZ:this.camera.z+depthAtScreenY(this.height*VIEW.bottomY,this.width,this.height),maxZ:this.camera.z+depthAtScreenY(this.height*VIEW.topY,this.width,this.height)};
   }
   emit(type,detail={}){const event={type,...detail};this.events.push(event);this.onEvent(event);}
   steer(dx,dz=0){const p=this.player,b=this.movementBounds();this.dragging=true;p.targetX=clamp(p.targetX+dx,b.minX,b.maxX);p.targetZ=clamp(p.targetZ+dz,b.minZ,b.maxZ);}
@@ -70,14 +77,19 @@ export class Game{
     const p=this.player,k=this.keyboard,forward=this.tune().forward,b=this.movementBounds();
     p.targetX=clamp(p.targetX,b.minX,b.maxX);
     p.targetZ=clamp(p.targetZ+forward*dt,b.minZ,b.maxZ);
-    const desired=k.x||k.z?limited(k.x*FIELD.steerSpeed,k.z*FIELD.steerSpeed,FIELD.steerSpeed):this.dragging?limited((p.targetX-p.x)*22,(p.targetZ-p.z-forward*dt)*22,FIELD.steerSpeed):{x:0,z:0};
-    const blend=damp(dt,this.dragging?.022:.034);
+    const settings=this.steering,multiplier=settings.speedPercent/100,maxSpeed=FIELD.steerSpeed*multiplier,smoothing=settings.smoothingEnabled?settings.smoothingPercent/100:0;
+    const direct=smoothing===0,gain=direct?1/dt:22*multiplier,oldX=p.x,expectedZ=p.z+forward*dt;
+    const desired=k.x||k.z?limited(k.x*maxSpeed,k.z*maxSpeed,maxSpeed):this.dragging?limited((p.targetX-p.x)*gain,(p.targetZ-expectedZ)*gain,maxSpeed):{x:0,z:0};
+    const response=(this.dragging?.008+smoothing*.04:.012+smoothing*.05)/multiplier,blend=direct?1:damp(dt,response);
     p.controlVX=mix(p.controlVX,desired.x,blend);p.controlVZ=mix(p.controlVZ,desired.z,blend);
     p.vx=p.controlVX;p.vz=forward+p.controlVZ;
     p.x+=p.vx*dt;p.z+=p.vz*dt;
+    if(this.dragging&&!k.x&&!k.z){
+      if((p.targetX-oldX)*(p.targetX-p.x)<=0){p.x=p.targetX;p.vx=p.controlVX=0;}
+      if((p.targetZ-expectedZ)*(p.targetZ-p.z)<=0){p.z=p.targetZ;p.controlVZ=0;p.vz=forward;}
+    }
     if(p.z<b.minZ||p.z>b.maxZ){p.z=clamp(p.z,b.minZ,b.maxZ);p.targetZ=p.z;p.controlVZ=0;p.vz=forward;}
-    const horizontal=this.movementBounds(p.z);
-    if(p.x<horizontal.minX||p.x>horizontal.maxX){p.x=clamp(p.x,horizontal.minX,horizontal.maxX);p.targetX=p.x;p.vx=p.controlVX=0;}
+    if(p.x<b.minX||p.x>b.maxX){p.x=clamp(p.x,b.minX,b.maxX);p.targetX=p.x;p.vx=p.controlVX=0;}
     if(!this.dragging||k.x||k.z){p.targetX=p.x;p.targetZ=p.z;}
     p.glow=Math.max(0,p.glow-dt*2.4);
   }
@@ -85,6 +97,16 @@ export class Game{
     const c=this.camera;c.prevX=c.x;c.prevZ=c.z;
     // Scroll with the run, preserving cuts on both axes instead of recentering the player.
     c.z+=this.tune().forward*dt;
+  }
+  followSideways(){
+    // Past the free middle, the field eases into the runner's sideways speed and matches it at followEnd.
+    // It only moves while the runner heads outward, so it stops with the runner and never drifts back toward center.
+    const c=this.camera,p=this.player,span=VIEW.width/projectPoint(p.x,p.z,c,this.width,this.height).s,offset=(p.x-c.x)/span,moved=p.x-p.prevX;
+    const share=moved*offset>0?clamp((Math.abs(offset)-VIEW.followStart)/(VIEW.followEnd-VIEW.followStart),0,1):0;
+    const zone=VIEW.followEnd*span,limit=FIELD.halfWidth+VIEW.sidelineMargin-VIEW.width/2,x=clamp(clamp(c.x+moved*share,p.x-zone,p.x+zone),-limit,limit);
+    // A held drag target slides with the field so the runner stays under the finger.
+    if(this.dragging)p.targetX+=x-c.x;
+    c.x=x;
   }
   planRush(){
     const tune=this.tune(),budget=tune.capacity-this.enemies.length;
@@ -121,6 +143,11 @@ export class Game{
     const dx=p.x-x,dz=p.z-z,d=Math.hypot(dx,dz)||1,speed=edge==='south'?tune.forward*1.35:enemy.speed;enemy.vx=dx/d*speed;enemy.vz=dz/d*speed;
     this.enemies.push(enemy);this.warnings.push({enemy,visible:true});this.emit('incoming',{id:enemy.id,edge,rushID});return enemy;
   }
+  limitTrailingPursuit(){
+    const p=this.player,tune=this.tune(),followers=this.enemies.filter(e=>e.entered&&!e.disengaged&&e.fatigue<.15&&(e.evaded||p.z-e.z>.25));
+    followers.sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z));
+    for(const e of followers.slice(tune.tailLimit)){e.evaded=e.disengaged=true;e.pursuitAge=Math.max(e.pursuitAge,tune.pursuitWindow+tune.fatigueDuration*.8);}
+  }
   updateEnemy(e,dt){
     const p=this.player,dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz),lead=e.pattern==='intercept'?e.anticipation:.04;
     e.age+=dt;e.closestDistance=Math.min(e.closestDistance,distance);
@@ -129,17 +156,18 @@ export class Game{
     // Being beaten starts a persistent clock. Cuts and touchdowns cannot refresh that defender.
     if(!e.evaded&&e.entered&&e.age>.35&&dz>.25)e.evaded=true;
     if(e.evaded)e.pursuitAge+=dt;
-    const progress=clamp((e.pursuitAge-tune.pursuitWindow)/3,0,1);
-    e.fatigue=progress*progress*(3-2*progress);
-    e.mode=e.fatigue>=1?'falling-back':e.evaded?'pursuit':'approach';
+    if(e.evaded&&!e.exitSide)e.exitSide=Math.abs(e.x-p.x)>.15?Math.sign(e.x-p.x):(Math.cos(e.phase)>=0?1:-1);
+    const progress=clamp((e.pursuitAge-tune.pursuitWindow)/tune.fatigueDuration,0,1);
+    e.fatigue=Math.max(e.fatigue,progress*progress*(3-2*progress));
+    e.mode=e.fatigue>.15?'falling-back':e.evaded?'pursuit':'approach';
     const chase=clamp((dz-.25)/2,0,1),stamina=1-.04*clamp((dz-12)/20,0,1);
     const effort=rearEntry?Math.max(e.pursuitSpeed,tune.forward*1.35):mix(e.speed,e.pursuitSpeed??e.speed,chase)*stamina;
     const speed=mix(effort,Math.min(effort,tune.forward*tune.fallbackRatio),e.fatigue);
     const aimX=dx+p.vx*lead,aimZ=dz+p.vz*lead,length=Math.hypot(aimX,aimZ)||1;
     let avoidX=0,avoidZ=0;
     for(const other of this.enemies){if(other===e)continue;const dx=e.x-other.x,dz=e.z-other.z,d=Math.hypot(dx,dz);if(d>.01&&d<1.5){const weight=(1.5-d)/1.5;avoidX+=dx/d*weight;avoidZ+=dz/d*weight;}}
-    // Exhausted defenders jog straight upfield while the camera and runner pull away.
-    const headingX=aimX/length*(1-e.fatigue),headingZ=mix(aimZ/length,1,e.fatigue);
+    // Beaten defenders peel away from the runner's lane while losing ground.
+    const headingX=aimX/length*(1-e.fatigue)+e.exitSide*e.fatigue*.7,headingZ=mix(aimZ/length,1,e.fatigue);
     const desired=limited(headingX*speed+avoidX*3,headingZ*speed+avoidZ*3,speed),desiredX=desired.x,desiredZ=desired.z,blend=damp(dt,e.turnResponse??.18);
     const change=limited((desiredX-e.vx)*blend,(desiredZ-e.vz)*blend,38*dt);
     e.vx+=change.x;e.vz+=change.z;e.x+=e.vx*dt;e.z+=e.vz*dt;
@@ -147,7 +175,8 @@ export class Game{
     if(!outside&&!e.hasAppeared){e.hasAppeared=true;this.emit('arrival',{id:e.id,edge:e.edge,stage:e.stage,rushID:e.rushID});}
     if(!e.entered&&!outside&&(e.edge!=='south'||bounds.bottom<this.height*.95))e.entered=true;
     const view=visibleWorld(this.camera,this.width,this.height);
-    if(e.z<view.minZ-12||(e.hasAppeared&&outside&&e.z<p.z-8&&e.z<view.minZ-2)||Math.abs(e.x)>FIELD.halfWidth+16)e.retired=true;
+    const clearOfScreen=bounds.right<-24||bounds.left>this.width+24||bounds.bottom<-24||bounds.top>this.height+24;
+    if((e.evaded&&e.fatigue>.9&&clearOfScreen)||e.z<view.minZ-12||(e.hasAppeared&&outside&&e.z<p.z-8&&e.z<view.minZ-2)||Math.abs(e.x)>FIELD.halfWidth+16)e.retired=true;
   }
   updateDodges(){
     const p=this.player;
@@ -167,9 +196,10 @@ export class Game{
   }
   update(dt){
     if(!this.alive)return;this.events=[];this.time+=dt;const p=this.player,oldX=p.x,oldZ=p.z;p.prevX=oldX;p.prevZ=oldZ;
-    this.updateCamera(dt);this.updatePlayer(dt);this.furthestZ=Math.max(this.furthestZ,p.z);this.distance=Math.max(0,this.furthestZ-this.startZ);
+    this.updateCamera(dt);this.updatePlayer(dt);this.followSideways();this.furthestZ=Math.max(this.furthestZ,p.z);this.distance=Math.max(0,this.furthestZ-this.startZ);
     this.nextSpawn-=dt;
     if(this.nextSpawn<=0){this.planRush();this.nextSpawn=this.tune().interval*(.88+this.random()*.24);}
+    this.limitTrailingPursuit();
     for(const e of this.enemies){
       const ex=e.x,ez=e.z;e.prevX=ex;e.prevZ=ez;this.updateEnemy(e,dt);
       if(sweptHit(ex-oldX,ez-oldZ,e.x-p.x,e.z-p.z,FIELD.playerRadius+FIELD.enemyRadius)){this.alive=false;this.emit('collision',{x:p.x,z:p.z});return;}

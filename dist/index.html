@@ -49,11 +49,12 @@
           <button class="icon-button haptic-toggle" aria-label="Turn haptics off" aria-pressed="true"><svg><use href="#i-haptic"/></svg></button>
           <span class="control-divider"></span>
           <button class="icon-button" id="pause-button" aria-label="Pause game" disabled><svg><use href="#i-pause"/></svg></button>
+          <button class="icon-button settings-button" id="settings-button" aria-label="Game settings">&#9881;</button>
           <button class="icon-button help-button" id="help-button" aria-label="How to play">?</button>
         </div>
         <div class="countdown" id="countdown" hidden aria-live="assertive"></div>
         <div class="game-overlay" id="pause-overlay" hidden>
-          <div class="overlay-card"><span class="eyebrow">TAKE A BREATHER</span><h2>TIME OUT.</h2><p>Your opening will be here.</p><button class="primary-button" id="resume-button">BACK TO IT <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="quit-button">Back to the sideline</button></div>
+          <div class="overlay-card"><span class="eyebrow">TAKE A BREATHER</span><h2>TIME OUT.</h2><p>Your opening will be here.</p><button class="primary-button" id="resume-button">BACK TO IT <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="pause-settings">Game settings</button><button class="text-button" id="quit-button">Back to the sideline</button></div>
         </div>
         <div class="game-overlay" id="over-overlay" hidden>
           <div class="overlay-card result-card"><span class="eyebrow" id="result-eyebrow">GOOD RUN. GO AGAIN.</span><h2>TACKLED.</h2><span class="result-score-label">FINAL SCORE</span><strong id="final-score">0</strong>
@@ -63,7 +64,20 @@
       </div>
     </section>
   </main>
-  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>You run upfield automatically.</strong> Swipe or drag anywhere to cut left, right, up, down, or diagonally. Move freely left, right, up, or down the screen. Release to keep your position as the pitch scrolls. Arrow keys and W / A / S / D work too.</p><p>Defenders run in from the edges in groups from different directions and <strong>keep chasing you.</strong> Smaller arrows mean distant defenders; larger arrows mean they are close. Cut around them and pull away to leave them behind.</p><p>Gain <strong class="lime">+1 per new yard</strong> as you run forward. A close defender evaded earns <strong class="lime">+50 DODGE</strong>. Cross the end zone for <strong class="lime">+500 TOUCHDOWN</strong> and a new field. One tackle ends your run. Easy starts against red defenders. Medium starts at the faster white defense stage. Hardcore starts against the faster elite defense. Every touchdown brings stronger, larger attacks; elite defenders stay elite. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" id="close-help" aria-label="Close instructions">×</button><span class="eyebrow">A QUICK HUDDLE</span><h2>USE THE<br>WHOLE FIELD.</h2><p><strong>You run upfield automatically.</strong> Swipe or drag anywhere to cut left, right, up, down, or diagonally. Move freely left, right, up, or down the screen. Keep cutting toward a sideline and the field slides with you. Release to keep your position as the pitch scrolls. Arrow keys and W / A / S / D work too.</p><p>Defenders run in from the edges in groups from different directions and <strong>keep chasing you.</strong> Smaller arrows mean distant defenders; larger arrows mean they are close. Cut around them and pull away to leave them behind.</p><p>Gain <strong class="lime">+1 per new yard</strong> as you run forward. A close defender evaded earns <strong class="lime">+50 DODGE</strong>. Cross the end zone for <strong class="lime">+500 TOUCHDOWN</strong> and a new field. One tackle ends your run. Easy starts against red defenders. Medium starts at the faster white defense stage. Hardcore starts against the faster elite defense. Every touchdown brings stronger, larger attacks; elite defenders stay elite. Press Space or Escape to pause.</p><button class="primary-button" id="got-it">GOT IT <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <button class="dialog-close" id="close-settings" aria-label="Close settings">&times;</button>
+    <span class="eyebrow">MAKE THE CUT YOURS</span><h2 id="settings-title">YOUR CONTROLS.</h2>
+    <p class="settings-intro">Adjust the feel. Your preferences save automatically.</p>
+    <label class="setting-label" for="steering-speed">Steering speed <output id="steering-speed-value" for="steering-speed">120%</output></label>
+    <input type="range" id="steering-speed" min="60" max="200" step="5" value="120" aria-describedby="speed-help">
+    <p class="setting-help" id="speed-help">Higher values make cuts and direction changes quicker.</p>
+    <div class="setting-switch"><div><label for="steering-smoothing-enabled">Movement smoothing</label><p class="setting-help">Turn off for direct, immediate response.</p></div><input type="checkbox" role="switch" id="steering-smoothing-enabled" checked></div>
+    <label class="setting-label" for="steering-smoothing">Smoothing amount <output id="steering-smoothing-value" for="steering-smoothing">50%</output></label>
+    <input type="range" id="steering-smoothing" min="0" max="100" step="5" value="50" aria-describedby="smoothing-help">
+    <p class="setting-help" id="smoothing-help">Less feels sharper. More rounds out movement.</p>
+    <div class="settings-actions"><button class="text-button" id="reset-settings">Reset defaults</button><button class="primary-button" id="done-settings">DONE <svg><use href="#i-arrow"/></svg></button></div>
+  </dialog>
   <div class="sr-only" id="announcer" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>
